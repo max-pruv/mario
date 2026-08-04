@@ -6,7 +6,7 @@
 // clients pick up new releases automatically within minutes.
 // Bump CACHE_VERSION on every release to force an immediate coordinated update.
 
-const CACHE_VERSION = 'iam-kart-v3';
+const CACHE_VERSION = 'iam-kart-v4';
 
 const ASSETS = [
   './',
@@ -15,6 +15,16 @@ const ASSETS = [
   './game.js',
   './vendor/three.module.js',
   './vendor/three.core.min.js',
+  './vendor/addons/postprocessing/EffectComposer.js',
+  './vendor/addons/postprocessing/RenderPass.js',
+  './vendor/addons/postprocessing/ShaderPass.js',
+  './vendor/addons/postprocessing/MaskPass.js',
+  './vendor/addons/postprocessing/Pass.js',
+  './vendor/addons/postprocessing/UnrealBloomPass.js',
+  './vendor/addons/postprocessing/OutputPass.js',
+  './vendor/addons/shaders/CopyShader.js',
+  './vendor/addons/shaders/LuminosityHighPassShader.js',
+  './vendor/addons/shaders/OutputShader.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',

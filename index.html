@@ -14,6 +14,14 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="IAM Kart">
 <link rel="stylesheet" href="./style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.js",
+    "three/addons/": "./vendor/addons/"
+  }
+}
+</script>
 </head>
 <body>
 <div id="wrap">
@@ -25,13 +33,13 @@
   <!-- Touch controls -->
   <div id="controls">
     <div class="pad left">
-      <button class="btn steer" id="btnL" aria-label="Gauche">◀</button>
-      <button class="btn steer" id="btnR" aria-label="Droite">▶</button>
+      <div id="stick" aria-label="Joystick de direction"><div id="knob"></div></div>
     </div>
     <div class="pad right">
       <button class="btn item" id="btnB" aria-label="Objet">B</button>
       <button class="btn gas"  id="btnA" aria-label="Accélérer">A</button>
     </div>
+    <button id="btnGyro" aria-label="Activer le gyroscope">🧭 GYRO&nbsp;: OFF</button>
   </div>
 
   <div id="rotate-hint">📱 Tourne ton téléphone en mode paysage&nbsp;!</div>

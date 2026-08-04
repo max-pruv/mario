@@ -3,7 +3,11 @@
    3D WebGL kart racer (Three.js) with glowing sci-fi ships.
    Vanilla JS + Three.js only, all assets generated in code.
    ============================================================ */
-import * as THREE from './vendor/three.module.js';
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 /* ---------------- Constants ---------------- */
 const HALFW = 100;              // road half-width (world units)
@@ -56,7 +60,100 @@ function bindBtn(id, key) {
   el.addEventListener('mouseup', off);
   el.addEventListener('mouseleave', off);
 }
-bindBtn('btnL', 'left'); bindBtn('btnR', 'right'); bindBtn('btnA', 'gas'); bindBtn('btnB', 'item');
+bindBtn('btnA', 'gas'); bindBtn('btnB', 'item');
+
+/* ---------- Analog joystick (overrides gyro while touched) ---------- */
+const joy = { active: false, value: 0 };
+{
+  const stick = document.getElementById('stick');
+  const knob = document.getElementById('knob');
+  const RADIUS = 44;
+  let pid = null;
+  const move = (clientX) => {
+    const r = stick.getBoundingClientRect();
+    const dx = clamp(clientX - (r.left + r.width / 2), -RADIUS, RADIUS);
+    joy.value = dx / RADIUS;
+    knob.style.transform = `translateX(${dx}px)`;
+  };
+  stick.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    pid = e.pointerId;
+    stick.setPointerCapture(pid);
+    joy.active = true;
+    move(e.clientX);
+    unlockAudio();
+  });
+  stick.addEventListener('pointermove', (e) => {
+    if (e.pointerId === pid && joy.active) move(e.clientX);
+  });
+  const end = (e) => {
+    if (e.pointerId !== pid) return;
+    joy.active = false; joy.value = 0; pid = null;
+    knob.style.transform = 'translateX(0)';
+  };
+  stick.addEventListener('pointerup', end);
+  stick.addEventListener('pointercancel', end);
+}
+
+/* ---------- Gyroscope steering (iPhone/Android tilt) ---------- */
+const gyro = { enabled: false, steer: 0, supported: 'DeviceOrientationEvent' in window };
+const gyroBtn = document.getElementById('btnGyro');
+
+function onOrientation(e) {
+  if (e.beta === null && e.gamma === null) return;
+  const angle = (screen.orientation && screen.orientation.angle) ?? window.orientation ?? 0;
+  // in landscape, rotating the phone like a steering wheel maps to beta
+  let tilt;
+  if (angle === 90) tilt = e.beta;
+  else if (angle === 270 || angle === -90) tilt = -e.beta;
+  else tilt = e.gamma; // portrait fallback
+  const DEAD = 2.5, FULL = 20; // degrees
+  const mag = Math.max(0, Math.abs(tilt) - DEAD) / (FULL - DEAD);
+  gyro.steer = clamp(Math.sign(tilt) * mag, -1, 1);
+}
+
+async function toggleGyro() {
+  unlockAudio();
+  if (gyro.enabled) {
+    gyro.enabled = false; gyro.steer = 0;
+  } else {
+    try {
+      if (typeof DeviceOrientationEvent !== 'undefined' &&
+          typeof DeviceOrientationEvent.requestPermission === 'function') {
+        const res = await DeviceOrientationEvent.requestPermission(); // iOS 13+
+        if (res !== 'granted') return updateGyroBtn();
+      }
+      addEventListener('deviceorientation', onOrientation);
+      gyro.enabled = true;
+      beep(660, 0.1, 'square', 990);
+    } catch (err) { /* refusé : on reste au joystick */ }
+  }
+  try { localStorage.setItem('iam-gyro', gyro.enabled ? '1' : '0'); } catch (e) {}
+  updateGyroBtn();
+}
+function updateGyroBtn() {
+  gyroBtn.textContent = gyro.enabled ? '🧭 GYRO : ON' : '🧭 GYRO : OFF';
+  gyroBtn.classList.toggle('on', gyro.enabled);
+}
+gyroBtn.addEventListener('click', toggleGyro);
+// restore preference (Android: no permission needed; iOS re-asks on first toggle)
+try {
+  if (localStorage.getItem('iam-gyro') === '1' &&
+      !(typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function')) {
+    addEventListener('deviceorientation', onOrientation);
+    gyro.enabled = true;
+  }
+} catch (e) {}
+updateGyroBtn();
+
+// steering priority: keyboard/menu buttons > joystick > gyroscope
+function getPlayerSteer() {
+  const kb = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+  if (kb) return kb;
+  if (joy.active) return joy.value;
+  if (gyro.enabled) return gyro.steer;
+  return 0;
+}
 
 const glCanvas = document.getElementById('game');
 glCanvas.addEventListener('pointerdown', () => { input.start = true; unlockAudio(); });
@@ -143,6 +240,15 @@ scene.fog = new THREE.Fog(0x8a5a78, 900, 3300);
 
 const camera = new THREE.PerspectiveCamera(66, 3 / 2, 1, 5000);
 
+// post-processing: MSAA render target + neon bloom + tone-mapped output
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(2, 2, {
+  samples: 4, type: THREE.HalfFloatType,
+}));
+composer.addPass(new RenderPass(scene, camera));
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(480, 320), 0.55, 0.65, 0.78);
+composer.addPass(bloomPass);
+composer.addPass(new OutputPass());
+
 const hemi = new THREE.HemisphereLight(0xb090e0, 0x3a5a3a, 1.05);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffd9a0, 2.4);
@@ -217,6 +323,18 @@ const skyTex = (() => {
   const sky = new THREE.Mesh(new THREE.SphereGeometry(3800, 32, 24, 0, TAU, 0, Math.PI * 0.62), skyMat);
   sky.position.set(WORLDC, -80, WORLDC);
   scene.add(sky);
+}
+
+// image-based lighting: the painted sky becomes the PBR environment, so kart
+// paint, chrome and visors pick up real dusk reflections
+{
+  const envTex = skyTex.clone();
+  envTex.mapping = THREE.EquirectangularReflectionMapping;
+  envTex.needsUpdate = true;
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromEquirectangular(envTex).texture;
+  scene.environmentIntensity = 0.7;
+  pmrem.dispose();
 }
 
 const grassTex = canvasTexture(256, (g) => {
@@ -420,7 +538,7 @@ const boostPads = [];
     tex.needsUpdate = true;
     const m = new THREE.Mesh(
       new THREE.PlaneGeometry(64, HALFW * 1.4),
-      new THREE.MeshBasicMaterial({ map: tex, transparent: false })
+      new THREE.MeshBasicMaterial({ map: tex, transparent: false, color: new THREE.Color(1.7, 1.7, 1.7) })
     );
     m.rotation.x = -Math.PI / 2;
     m.rotation.z = -Math.atan2(c.diry, c.dirx);
@@ -498,6 +616,238 @@ const itemBoxes = [];
   mk(roundGeo, roundMat, rounds, 46);
 })();
 
+/* ---------------- Neon track bollards (instanced, bloom-lit) ---------------- */
+(function placeBollards() {
+  const idxs = [];
+  for (let i = 0; i < N; i += 8) idxs.push(i);
+  const count = idxs.length * 2;
+  const postGeo = new THREE.CylinderGeometry(1.8, 2.2, 9, 6);
+  const postMat = new THREE.MeshStandardMaterial({ color: 0x22222e, roughness: 0.5, metalness: 0.6 });
+  const posts = new THREE.InstancedMesh(postGeo, postMat, count);
+  const tipGeo = new THREE.SphereGeometry(2.6, 8, 8);
+  const tipMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(2, 2, 2) }); // HDR: feeds the bloom pass
+  const tips = new THREE.InstancedMesh(tipGeo, tipMat, count);
+  const m4 = new THREE.Matrix4();
+  const cyan = new THREE.Color(0x40e0ff), magenta = new THREE.Color(0xff50dc);
+  let n = 0;
+  for (const i of idxs) {
+    const c = center[i];
+    for (const side of [-1, 1]) {
+      const x = c.x + c.nx * side * (HALFW + 22);
+      const z = c.y + c.ny * side * (HALFW + 22);
+      m4.identity(); m4.setPosition(x, 4.5, z);
+      posts.setMatrixAt(n, m4);
+      m4.identity(); m4.setPosition(x, 10.5, z);
+      tips.setMatrixAt(n, m4);
+      tips.setColorAt(n, side < 0 ? cyan : magenta);
+      n++;
+    }
+  }
+  scene.add(posts); scene.add(tips);
+})();
+
+/* ---------------- Neon city skyline ---------------- */
+(function buildCity() {
+  let seed = 42;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const winTex = canvasTexture(128, (g) => {
+    g.fillStyle = '#0a0a14'; g.fillRect(0, 0, 128, 128);
+    for (let y = 6; y < 122; y += 12)
+      for (let x = 8; x < 120; x += 14) {
+        if (rnd() < 0.55) {
+          g.fillStyle = ['#ffd27a', '#9adcff', '#ff9ad0', '#fff0c0'][(x + y) % 4];
+          g.fillRect(x, y, 7, 7);
+        }
+      }
+  }, true);
+  const geo = new THREE.BoxGeometry(1, 1, 1);
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x11111c, roughness: 0.8, metalness: 0.2,
+    emissive: 0xffffff, emissiveMap: winTex, emissiveIntensity: 0.9, map: winTex,
+  });
+  const COUNT = 90;
+  const city = new THREE.InstancedMesh(geo, mat, COUNT);
+  const m4 = new THREE.Matrix4();
+  for (let i = 0; i < COUNT; i++) {
+    const a = (i / COUNT) * TAU + rnd() * 0.08;
+    const r = 1750 + rnd() * 700;
+    const w = 70 + rnd() * 110;
+    const h = 120 + rnd() * 380;
+    m4.makeScale(w, h, w);
+    m4.setPosition(WORLDC + Math.cos(a) * r, h / 2 - 4, WORLDC + Math.sin(a) * r);
+    city.setMatrixAt(i, m4);
+  }
+  scene.add(city);
+})();
+
+/* ---------------- Grandstand + floodlights near the start ---------------- */
+(function buildStartArea() {
+  const c = center[(N - 14 + N) % N];
+  const side = 1; // opposite the pit
+  const bx = c.x + c.nx * side * (HALFW + 95);
+  const bz = c.y + c.ny * side * (HALFW + 95);
+  const yaw = -Math.atan2(c.diry, c.dirx);
+
+  const stand = new THREE.Group();
+  const base = new THREE.Mesh(
+    new THREE.BoxGeometry(230, 8, 70),
+    new THREE.MeshStandardMaterial({ color: 0x2a2a3c, roughness: 0.7 })
+  );
+  base.position.y = 4;
+  stand.add(base);
+  for (let row = 0; row < 4; row++) {
+    const step = new THREE.Mesh(
+      new THREE.BoxGeometry(230, 10, 16),
+      new THREE.MeshStandardMaterial({ color: 0x353550, roughness: 0.7 })
+    );
+    step.position.set(0, 8 + row * 10, 10 + row * 16);
+    stand.add(step);
+  }
+  // crowd: instanced colored spheres on the steps
+  let seed = 99;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const CROWD = 180;
+  const fan = new THREE.InstancedMesh(
+    new THREE.SphereGeometry(3.4, 6, 6),
+    new THREE.MeshStandardMaterial({ roughness: 0.9 }),
+    CROWD
+  );
+  const m4 = new THREE.Matrix4();
+  const col = new THREE.Color();
+  for (let i = 0; i < CROWD; i++) {
+    const row = i % 4;
+    m4.identity();
+    m4.setPosition(-108 + rnd() * 216, 17 + row * 10, 8 + row * 16 + (rnd() - 0.5) * 6);
+    fan.setMatrixAt(i, m4);
+    fan.setColorAt(i, col.setHSL(rnd(), 0.75, 0.6));
+  }
+  stand.add(fan);
+  // roof with neon edge
+  const roof = new THREE.Mesh(
+    new THREE.BoxGeometry(238, 4, 90),
+    new THREE.MeshStandardMaterial({ color: 0x1c1c2c, roughness: 0.5, metalness: 0.5 })
+  );
+  roof.position.set(0, 62, 24);
+  stand.add(roof);
+  const trim = new THREE.Mesh(
+    new THREE.BoxGeometry(238, 2, 4),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 1.75, 2) })
+  );
+  trim.position.set(0, 62, -21);
+  stand.add(trim);
+  stand.position.set(bx, 0, bz);
+  stand.rotation.y = yaw;
+  scene.add(stand);
+
+  // two floodlight towers with glowing lamps and volumetric-looking cones
+  for (const off of [-38, 10]) {
+    const ci = center[(N - 14 + off + N) % N];
+    const tx = ci.x + ci.nx * -1 * (HALFW + 55);
+    const tz = ci.y + ci.ny * -1 * (HALFW + 55);
+    const tower = new THREE.Group();
+    const pole = new THREE.Mesh(
+      new THREE.CylinderGeometry(3, 4.5, 150, 8),
+      new THREE.MeshStandardMaterial({ color: 0x30304a, roughness: 0.5, metalness: 0.6 })
+    );
+    pole.position.y = 75;
+    tower.add(pole);
+    const panel = new THREE.Mesh(
+      new THREE.BoxGeometry(34, 16, 6),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 2.2, 1.8) })
+    );
+    panel.position.set(0, 152, 8);
+    panel.rotation.x = 0.7;
+    tower.add(panel);
+    const cone = new THREE.Mesh(
+      new THREE.ConeGeometry(70, 170, 16, 1, true),
+      new THREE.MeshBasicMaterial({
+        color: 0xffeebb, transparent: true, opacity: 0.035,
+        blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false,
+      })
+    );
+    cone.position.set(0, 70, 60);
+    cone.rotation.x = 0.55;
+    tower.add(cone);
+    tower.position.set(tx, 0, tz);
+    tower.rotation.y = yaw;
+    scene.add(tower);
+  }
+})();
+
+/* ---------------- Hot-air balloons ---------------- */
+const balloons = [];
+(function buildBalloons() {
+  const stripeTex = canvasTexture(128, (g) => {
+    for (let i = 0; i < 8; i++) {
+      g.fillStyle = i % 2 ? '#ff5060' : '#ffd24a';
+      g.fillRect(i * 16, 0, 16, 128);
+    }
+  }, true);
+  const stripeTex2 = canvasTexture(128, (g) => {
+    for (let i = 0; i < 8; i++) {
+      g.fillStyle = i % 2 ? '#40e0ff' : '#f8f8ff';
+      g.fillRect(i * 16, 0, 16, 128);
+    }
+  }, true);
+  const defs = [
+    { x: WORLDC - 500, z: WORLDC + 650, y: 320, tex: stripeTex, ph: 0 },
+    { x: WORLDC + 720, z: WORLDC - 420, y: 380, tex: stripeTex2, ph: 2.5 },
+  ];
+  for (const d of defs) {
+    const g = new THREE.Group();
+    const env = new THREE.Mesh(
+      new THREE.SphereGeometry(55, 18, 14),
+      new THREE.MeshStandardMaterial({ map: d.tex, roughness: 0.6, emissive: 0x442211, emissiveIntensity: 0.25 })
+    );
+    env.scale.y = 1.15;
+    g.add(env);
+    const basket = new THREE.Mesh(
+      new THREE.BoxGeometry(20, 16, 20),
+      new THREE.MeshStandardMaterial({ color: 0x7a5a30, roughness: 0.9 })
+    );
+    basket.position.y = -85;
+    g.add(basket);
+    g.position.set(d.x, d.y, d.z);
+    scene.add(g);
+    balloons.push({ group: g, baseY: d.y, ph: d.ph });
+  }
+})();
+
+/* ---------------- Player headlights ---------------- */
+const headlight = new THREE.SpotLight(0xfff3d0, 0, 500, 0.55, 0.5, 1.2);
+headlight.castShadow = false;
+scene.add(headlight);
+scene.add(headlight.target);
+
+/* ---------------- Finish confetti ---------------- */
+const CONFETTI_N = 260;
+let confetti = null, confettiT = 0, confettiVel = null;
+function spawnConfetti() {
+  if (confetti) scene.remove(confetti);
+  const posArr = new Float32Array(CONFETTI_N * 3);
+  const colArr = new Float32Array(CONFETTI_N * 3);
+  confettiVel = new Float32Array(CONFETTI_N * 3);
+  const col = new THREE.Color();
+  for (let i = 0; i < CONFETTI_N; i++) {
+    posArr[i * 3] = player.x + (Math.random() - 0.5) * 260;
+    posArr[i * 3 + 1] = 90 + Math.random() * 120;
+    posArr[i * 3 + 2] = player.y + (Math.random() - 0.5) * 260;
+    confettiVel[i * 3] = (Math.random() - 0.5) * 30;
+    confettiVel[i * 3 + 1] = Math.random() * 25;
+    confettiVel[i * 3 + 2] = (Math.random() - 0.5) * 30;
+    col.setHSL(Math.random(), 0.9, 0.6);
+    colArr[i * 3] = col.r; colArr[i * 3 + 1] = col.g; colArr[i * 3 + 2] = col.b;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(colArr, 3));
+  confetti = new THREE.Points(geo, new THREE.PointsMaterial({
+    size: 7, vertexColors: true, sizeAttenuation: true, fog: false,
+  }));
+  confettiT = 0;
+  scene.add(confetti);
+}
+
 /* ---------------- Karts (3D models) ---------------- */
 function buildKartMesh(charIdx) {
   const ch = CHARACTERS[charIdx];
@@ -506,8 +856,13 @@ function buildKartMesh(charIdx) {
   const chassis = new THREE.Group();    // tilt applied here
   g.add(chassis);
 
-  const bodyMat = new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.25 });
+  // glossy clear-coated paint like a real kart shell
+  const bodyMat = new THREE.MeshPhysicalMaterial({
+    color, roughness: 0.28, metalness: 0.45,
+    clearcoat: 1.0, clearcoatRoughness: 0.12, envMapIntensity: 1.1,
+  });
   const darkMat = new THREE.MeshStandardMaterial({ color: 0x181820, roughness: 0.6, metalness: 0.4 });
+  const chromeMat = new THREE.MeshStandardMaterial({ color: 0xd8d8e0, roughness: 0.15, metalness: 1.0, envMapIntensity: 1.3 });
 
   // main body (nose toward +X)
   const body = new THREE.Mesh(new THREE.BoxGeometry(30, 7, 16), bodyMat);
@@ -545,11 +900,40 @@ function buildKartMesh(charIdx) {
   head.position.set(-3, 20, 0);
   head.castShadow = true;
   chassis.add(head);
-  const visor = new THREE.Mesh(new THREE.SphereGeometry(3.6, 10, 8, 0, Math.PI), new THREE.MeshStandardMaterial({ color: 0x223344, roughness: 0.1, metalness: 0.6 }));
+  const visor = new THREE.Mesh(new THREE.SphereGeometry(3.6, 10, 8, 0, Math.PI), new THREE.MeshPhysicalMaterial({ color: 0x1a2a3e, roughness: 0.05, metalness: 0.7, clearcoat: 1, envMapIntensity: 1.6 }));
   visor.rotation.y = Math.PI / 2;
   visor.position.set(0.4, 19.6, 0);
   visor.scale.set(1.15, 0.8, 1.1);
   chassis.add(visor);
+  // steering wheel
+  const wheelRing = new THREE.Mesh(new THREE.TorusGeometry(3.2, 0.8, 6, 12), darkMat);
+  wheelRing.rotation.y = Math.PI / 2;
+  wheelRing.rotation.x = 0.5;
+  wheelRing.position.set(5, 12.5, 0);
+  chassis.add(wheelRing);
+  // chrome exhaust pipes
+  for (const sz of [-4.5, 4.5]) {
+    const pipe = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2.1, 9, 8), chromeMat);
+    pipe.rotation.z = 1.25;
+    pipe.position.set(-16, 9.5, sz);
+    chassis.add(pipe);
+  }
+  // side pods
+  for (const sz of [-9.5, 9.5]) {
+    const pod = new THREE.Mesh(new THREE.BoxGeometry(14, 4.5, 4), bodyMat);
+    pod.position.set(2, 6.5, sz);
+    chassis.add(pod);
+  }
+  // front wing + headlights
+  const wing = new THREE.Mesh(new THREE.BoxGeometry(4, 1.6, 20), bodyMat);
+  wing.position.set(23, 4.2, 0);
+  chassis.add(wing);
+  const lightMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 2.1, 1.7) });
+  for (const sz of [-5.5, 5.5]) {
+    const hl = new THREE.Mesh(new THREE.SphereGeometry(1.4, 8, 8), lightMat);
+    hl.position.set(24.5, 6.5, sz);
+    chassis.add(hl);
+  }
 
   // wheels
   const wheelGeo = new THREE.CylinderGeometry(5.5, 5.5, 5, 14);
@@ -619,7 +1003,7 @@ function buildShip(type, colorHex, glowTex) {
   const g = new THREE.Group();
   const color = new THREE.Color(colorHex);
   const bodyMat = new THREE.MeshStandardMaterial({ color: 0x202030, roughness: 0.35, metalness: 0.8, emissive: color, emissiveIntensity: 0.25 });
-  const neonMat2 = new THREE.MeshBasicMaterial({ color });
+  const neonMat2 = new THREE.MeshBasicMaterial({ color: color.clone().multiplyScalar(1.9) }); // HDR neon
 
   if (type === 0) { // starfighter with X wings
     const fus = new THREE.Mesh(new THREE.CapsuleGeometry(7, 34, 4, 10), bodyMat);
@@ -861,7 +1245,7 @@ function updateKart(k, dt) {
     if (k.isPlayer && k.lap <= LAPS && state === 'race') {
       throttle = input.gas ? 1 : 0;
       if (input.brake) throttle = -1;
-      steer = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+      steer = getPlayerSteer(); // analog: clavier > joystick > gyroscope
     } else {
       const look = (k.trackIdx + 14 + ((k.speed / MAXSPEED) * 14) | 0) % N;
       const c = center[look];
@@ -895,8 +1279,9 @@ function updateKart(k, dt) {
   k.steerVis = lerp(k.steerVis, steer, Math.min(1, dt * 10));
 
   if (k.isPlayer) {
-    if (steer !== 0 && k.speed > MAXSPEED * 0.72 && (k.driftDir === 0 || k.driftDir === steer)) {
-      k.driftDir = steer;
+    const sDir = Math.abs(steer) > 0.3 ? Math.sign(steer) : 0;
+    if (sDir !== 0 && k.speed > MAXSPEED * 0.72 && (k.driftDir === 0 || k.driftDir === sDir)) {
+      k.driftDir = sDir;
       k.driftCharge += dt;
     } else {
       if (k.driftCharge > 1.05) { k.boostT = Math.max(k.boostT, 0.55); beep(200, 0.25, 'sawtooth', 700, 0.12); }
@@ -1081,6 +1466,36 @@ function updateWorldFX(dt, t) {
       spr.material.opacity = 0.35 * (1 - i / p.trail.length);
     });
   }
+  // balloons bobbing
+  for (const b of balloons) {
+    b.group.position.y = b.baseY + Math.sin(t * 0.4 + b.ph) * 22;
+    b.group.rotation.y = t * 0.1 + b.ph;
+  }
+  // player headlights
+  if (player && (state === 'race' || state === 'countdown' || state === 'finish')) {
+    const fx = Math.cos(player.angle), fz = Math.sin(player.angle);
+    headlight.intensity = 900;
+    headlight.position.set(player.x + fx * 26, 10, player.y + fz * 26);
+    headlight.target.position.set(player.x + fx * 240, 0, player.y + fz * 240);
+  } else headlight.intensity = 0;
+  // confetti
+  if (confetti) {
+    confettiT += dt;
+    const pos = confetti.geometry.attributes.position;
+    for (let i = 0; i < CONFETTI_N; i++) {
+      confettiVel[i * 3 + 1] -= 60 * dt; // gravity
+      pos.array[i * 3] += (confettiVel[i * 3] + Math.sin(t * 3 + i) * 14) * dt;
+      pos.array[i * 3 + 1] += confettiVel[i * 3 + 1] * dt;
+      pos.array[i * 3 + 2] += confettiVel[i * 3 + 2] * dt;
+    }
+    pos.needsUpdate = true;
+    if (confettiT > 7) {
+      scene.remove(confetti);
+      confetti.geometry.dispose();
+      confetti.material.dispose();
+      confetti = null;
+    }
+  }
   // gate lights
   if (state === 'countdown') {
     const n = Math.ceil(3 - countdownT);
@@ -1179,6 +1594,23 @@ function drawItemIcon(x, y, item, s = 1) {
 }
 
 function drawHUD() {
+  // anime-style speed lines while boosting
+  if (player.boostT > 0) {
+    hctx.save();
+    hctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    hctx.lineWidth = 2;
+    const cx = HW / 2, cy = HH / 2;
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * TAU + (perfNow * 0.01 % TAU);
+      const r1 = 110 + ((perfNow * 0.7 + i * 37) % 60);
+      const r2 = r1 + 45 + (i % 3) * 18;
+      hctx.beginPath();
+      hctx.moveTo(cx + Math.cos(a) * r1 * 1.6, cy + Math.sin(a) * r1);
+      hctx.lineTo(cx + Math.cos(a) * r2 * 1.6, cy + Math.sin(a) * r2);
+      hctx.stroke();
+    }
+    hctx.restore();
+  }
   text(PLACE_TXT[player.place - 1], 10, 8, 26, 'left', PLACE_COL[player.place - 1]);
   text(`LAP ${clamp(player.lap, 1, LAPS)}/${LAPS}`, HW - 10, 8, 16, 'right');
   text(fmtTime(raceTime), HW - 10, 28, 12, 'right', '#cfe');
@@ -1250,6 +1682,8 @@ function resize() {
   const r = glCanvas.getBoundingClientRect();
   if (r.width === 0) return;
   renderer.setSize(r.width, r.height, false);
+  composer.setSize(r.width, r.height);
+  composer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.75));
   camera.aspect = r.width / r.height;
   camera.updateProjectionMatrix();
   const dpr = Math.min(devicePixelRatio || 1, 2);
@@ -1270,10 +1704,12 @@ function frame(t) {
   const tSec = t * 0.001;
 
   const startPressed = input.start && !prevStart;
-  const leftPressed = input.left && !prevLeft;
-  const rightPressed = input.right && !prevRight;
+  const effLeft = input.left || joy.value < -0.5;   // the joystick also drives the menus
+  const effRight = input.right || joy.value > 0.5;
+  const leftPressed = effLeft && !prevLeft;
+  const rightPressed = effRight && !prevRight;
   const itemPressed = input.item && !prevItem;
-  prevStart = input.start; prevLeft = input.left; prevRight = input.right; prevItem = input.item;
+  prevStart = input.start; prevLeft = effLeft; prevRight = effRight; prevItem = input.item;
 
   // apply a pending app update as soon as we're not mid-race
   if (window.__iamUpdateReady && state !== 'race' && state !== 'countdown') {
@@ -1305,6 +1741,7 @@ function frame(t) {
     if (state === 'race' && player.lap > LAPS) {
       finishDelay = 1.4;
       state = 'finish';
+      spawnConfetti();
       beep(523, 0.15, 'square'); beep(659, 0.15, 'square');
       setTimeout(() => beep(784, 0.3, 'square', 1046), 180);
     }
@@ -1318,7 +1755,7 @@ function frame(t) {
   syncKartMeshes(dt);
   updateWorldFX(dt, tSec);
   updateCamera(dt);
-  renderer.render(scene, camera);
+  composer.render();
 
   // HUD overlay
   const S = hud.width / HW;

@@ -6,7 +6,7 @@
 // clients pick up new releases automatically within minutes.
 // Bump CACHE_VERSION on every release to force an immediate coordinated update.
 
-const CACHE_VERSION = 'iam-kart-v4';
+const CACHE_VERSION = 'iam-kart-v5';
 
 const ASSETS = [
   './',

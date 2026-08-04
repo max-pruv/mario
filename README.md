@@ -34,15 +34,18 @@ npx serve .        # ou : python3 -m http.server
 
 ## ✨ Fonctionnalités
 
-- **Rendu 3D WebGL** : éclairage crépusculaire, ombres dynamiques, brouillard atmosphérique, tone mapping filmique
-- **Vaisseaux lumineux farfelus** : chasseur à 4 ailes, soucoupe volante, donut néon, fusée rétro — avec halos et traînées lumineuses
-- **Avions cartoon** avec hélices et traînées de condensation
-- 8 personnages (Inès, Alice, Marlon, Rex, Nova, Zip, Violet, Blaze), 7 adversaires IA avec rubber-banding
-- 3 tours, classement temps réel, chrono, mini-carte
-- **Objets** : 🍄 champignon turbo, 🍌 banane, ⚡ éclair — boîtes à objets holographiques, pads de boost animés, mini-turbo de drift
-- Portique de départ avec feux tricolores, rails néon pulsants le long de la piste
-- Sons synthétisés en WebAudio (moteur, compte à rebours, objets)
-- PWA complète : hors ligne via service worker, icônes, plein écran paysage
+- **5 circuits** : Circuit Néon, **Paris** (Tour Eiffel), **Nice** (bord de mer, palmiers), **New York** (minuit, gratte-ciel), **Biarritz** (couchant sur l'océan, phare)
+- **3 catégories** : 50cc · 100cc · 150cc
+- **Rendu 3D WebGL haute qualité** : HDR + MSAA + bloom, réflexions PBR, ombres dynamiques, brouillard, tone mapping filmique
+- **Objets façon MK8** : roulette animée, 🍄 champignon, 🍌 banane, 🐢 carapace verte, ⚡ éclair, ⭐ étoile d'invincibilité — probabilités selon la position
+- **Pièces** à ramasser (+vitesse, perdues en cas de choc) avec compteur
+- **Scoreboard local** : top 5 des temps par circuit et par catégorie, sauvegardé sur l'appareil
+- **Gyroscope** (incliner le téléphone comme un volant) + **joystick analogique** prioritaire au toucher
+- 8 personnages (Inès, Alice, Marlon, Rex, Nova, Zip, Violet, Blaze), 7 IA avec rubber-banding, mini-turbo de drift
+- **Vaisseaux lumineux farfelus**, avions à hélice, montgolfières, tribunes, projecteurs
+- Sons synthétisés en WebAudio ; PWA hors ligne, plein écran paysage
+
+Voir aussi : [`docs/DEVLOG.md`](docs/DEVLOG.md) (journal des versions) et [`docs/LEARNINGS.md`](docs/LEARNINGS.md) (patterns repris du repo minecraft).
 
 ## 🚀 Déploiement (même modèle que le repo `minecraft`)
 

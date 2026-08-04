@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Kart Dash — Retro Racing</title>
+<meta name="description" content="Un jeu de kart rétro façon Mode 7, jouable dans le navigateur et installable sur mobile.">
+<meta name="theme-color" content="#0a0a14">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" href="./icons/icon-180.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Kart Dash">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game" width="480" height="320"></canvas>
+
+  <!-- Touch controls -->
+  <div id="controls">
+    <div class="pad left">
+      <button class="btn steer" id="btnL" aria-label="Gauche">◀</button>
+      <button class="btn steer" id="btnR" aria-label="Droite">▶</button>
+    </div>
+    <div class="pad right">
+      <button class="btn item" id="btnB" aria-label="Objet">B</button>
+      <button class="btn gas"  id="btnA" aria-label="Accélérer">A</button>
+    </div>
+  </div>
+
+  <div id="rotate-hint">📱 Tourne ton téléphone en mode paysage&nbsp;!</div>
+</div>
+
+<script src="./game.js"></script>
+<script>
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    });
+  }
+</script>
+</body>
+</html>

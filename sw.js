@@ -6,7 +6,11 @@
 // clients pick up new releases automatically within minutes.
 // Bump CACHE_VERSION on every release to force an immediate coordinated update.
 
-const CACHE_VERSION = 'iam-kart-v5';
+const CACHE_VERSION = 'iam-kart-v6';
+
+// Pages served by these very old caches predate the in-page auto-reload
+// logic — the only way to unstick them is a forced navigation on activate.
+const LEGACY_CACHES = /^(kart-dash-v1|iam-kart-v2)$/;
 
 const ASSETS = [
   './',
@@ -39,11 +43,20 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE_VERSION).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim())
-  );
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    const stale = keys.filter((k) => k !== CACHE_VERSION);
+    const hadLegacy = stale.some((k) => LEGACY_CACHES.test(k));
+    await Promise.all(stale.map((k) => caches.delete(k)));
+    await self.clients.claim();
+    if (hadLegacy) {
+      // Old pages can't reload themselves — do it for them.
+      const clients = await self.clients.matchAll({ type: 'window' });
+      for (const c of clients) {
+        try { if (c.navigate) c.navigate(c.url); } catch (e) { /* best effort */ }
+      }
+    }
+  })());
 });
 
 // Stale-while-revalidate: serve from cache instantly (works offline),
@@ -63,7 +76,6 @@ self.addEventListener('fetch', (event) => {
         .catch(() => cached);
       if (cached) return cached;
       const response = await network;
-      // offline navigation to an uncached URL falls back to the app shell
       if (!response && request.mode === 'navigate') {
         return cache.match('./index.html');
       }

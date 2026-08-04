@@ -1963,7 +1963,9 @@ function updateCamera(dt) {
     const fx = Math.cos(camAngle), fz = Math.sin(camAngle);
     camera.position.set(player.x - fx * CAMBACK, CAMH, player.y - fz * CAMBACK);
     camera.lookAt(player.x + fx * 70, 22, player.y + fz * 70);
-    camera.fov = lerp(camera.fov, player.boostT > 0 ? 74 : 66, Math.min(1, dt * 5));
+    // wider vertical FOV in portrait so the road stays visible
+    const baseFov = camera.aspect < 1 ? 94 : 66;
+    camera.fov = lerp(camera.fov, player.boostT > 0 ? baseFov + 8 : baseFov, Math.min(1, dt * 5));
     camera.updateProjectionMatrix();
     sun.position.set(player.x + 300, 500, player.y + 120);
     sun.target.position.set(player.x, 0, player.y);
@@ -1975,7 +1977,12 @@ const hud = document.getElementById('hud');
 const hctx = hud.getContext('2d');
 const PLACE_TXT = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'];
 const PLACE_COL = ['#ffd700', '#c0c0c0', '#cd7f32', '#fff', '#fff', '#fff', '#fff', '#fff'];
-const HW = 480, HH = 320;
+// HUD logical space: scaled so at least 480x320 fits, then stretched to the
+// real screen ratio (full-bleed, portrait and landscape both playable).
+const HH = 320;
+let HW = 480;   // logical width  (dynamic)
+let HB = 320;   // logical height (dynamic)
+let OY = 0;     // vertical offset to center the menu screens in portrait
 
 function text(str, x, y, size = 14, align = 'left', color = '#fff') {
   hctx.font = `bold ${size}px system-ui, sans-serif`;
@@ -2075,13 +2082,13 @@ function drawHUD() {
   } else if (player.item) {
     drawItemIcon(HW / 2, 24, player.item, 1.4);
   }
-  drawCoinIcon(18, HH - 20, 1.1);
-  text(`× ${player.coins}`, 30, HH - 28, 15, 'left', '#ffd24a');
+  drawCoinIcon(18, HB - 20, 1.1);
+  text(`× ${player.coins}`, 30, HB - 28, 15, 'left', '#ffd24a');
   hctx.globalAlpha = 0.9;
-  hctx.drawImage(track.miniCanvas, HW - 94, HH - 94);
+  hctx.drawImage(track.miniCanvas, HW - 94, HB - 94);
   for (const k of karts) {
     hctx.fillStyle = k.isPlayer ? '#fff' : CHARACTERS[k.charIdx].color;
-    const mx = HW - 94 + k.x / 2048 * 84, my = HH - 94 + k.y / 2048 * 84;
+    const mx = HW - 94 + k.x / 2048 * 84, my = HB - 94 + k.y / 2048 * 84;
     hctx.beginPath(); hctx.arc(mx, my, k.isPlayer ? 3 : 2.2, 0, TAU); hctx.fill();
   }
   hctx.globalAlpha = 1;
@@ -2089,45 +2096,47 @@ function drawHUD() {
 
 function drawMenu() {
   hctx.fillStyle = 'rgba(8,5,25,0.35)';
-  hctx.fillRect(0, 0, HW, HH);
-  text('IAM KART', HW / 2, 26, 54, 'center', '#40e0ff');
-  text('Inès · Alice · Marlon', HW / 2, 84, 16, 'center', '#ff50dc');
-  text('Choisis ton pilote', HW / 2, 118, 12, 'center', '#cfe');
+  hctx.fillRect(0, 0, HW, HB);
+  text('IAM KART', HW / 2, OY + 26, 54, 'center', '#40e0ff');
+  text('Inès · Alice · Marlon', HW / 2, OY + 84, 16, 'center', '#ff50dc');
+  text('Choisis ton pilote', HW / 2, OY + 118, 12, 'center', '#cfe');
 
   const ch = CHARACTERS[menuChar];
-  text('◀', HW / 2 - 100, 168, 26, 'center', '#fff');
-  text('▶', HW / 2 + 100, 168, 26, 'center', '#fff');
-  text(ch.name, HW / 2, 172, 22, 'center', ch.color);
+  text('◀', HW / 2 - 100, OY + 168, 26, 'center', '#fff');
+  text('▶', HW / 2 + 100, OY + 168, 26, 'center', '#fff');
+  text(ch.name, HW / 2, OY + 172, 22, 'center', ch.color);
 
   const blink = (perfNow / 500 | 0) % 2 === 0;
-  if (blink) text('TOUCHE / ENTRÉE POUR CONTINUER', HW / 2, 250, 14, 'center', '#fff');
-  text('← → choisir · A/↑ gaz · B/Shift objet', HW / 2, 292, 10, 'center', '#9ab');
+  if (blink) text('TOUCHE / ENTRÉE POUR CONTINUER', HW / 2, OY + 250, 14, 'center', '#fff');
+  text('← → choisir · A/↑ gaz · B/Shift objet', HW / 2, OY + 292, 10, 'center', '#9ab');
+  if (innerHeight > innerWidth && matchMedia('(pointer: coarse)').matches)
+    text('Astuce : verrouille la rotation iOS pour jouer au gyro en paysage 🔒', HW / 2, OY + 270, 9, 'center', '#8ac');
 }
 
 function drawMapSelect() {
   hctx.fillStyle = 'rgba(8,5,25,0.45)';
-  hctx.fillRect(0, 0, HW, HH);
-  text('CHOISIS TON CIRCUIT', HW / 2, 18, 22, 'center', '#40e0ff');
+  hctx.fillRect(0, 0, HW, HB);
+  text('CHOISIS TON CIRCUIT', HW / 2, OY + 18, 22, 'center', '#40e0ff');
   const map = MAPS[mapSel];
-  text('◀', HW / 2 - 130, 120, 30, 'center', '#fff');
-  text('▶', HW / 2 + 130, 120, 30, 'center', '#fff');
-  text(map.name.toUpperCase(), HW / 2, 60, 30, 'center', '#ffd24a');
-  text(map.desc, HW / 2, 98, 12, 'center', '#cfe');
+  text('◀', HW / 2 - 130, OY + 120, 30, 'center', '#fff');
+  text('▶', HW / 2 + 130, OY + 120, 30, 'center', '#fff');
+  text(map.name.toUpperCase(), HW / 2, OY + 60, 30, 'center', '#ffd24a');
+  text(map.desc, HW / 2, OY + 98, 12, 'center', '#cfe');
   hctx.globalAlpha = 0.95;
-  hctx.drawImage(track.miniCanvas, HW / 2 - 50, 122, 100, 100);
+  hctx.drawImage(track.miniCanvas, HW / 2 - 50, OY + 122, 100, 100);
   hctx.globalAlpha = 1;
-  text(`${mapSel + 1} / ${MAPS.length}`, HW / 2, 232, 11, 'center', '#9ab');
+  text(`${mapSel + 1} / ${MAPS.length}`, HW / 2, OY + 232, 11, 'center', '#9ab');
   const blink = (perfNow / 500 | 0) % 2 === 0;
-  if (blink) text('TOUCHE / ENTRÉE POUR VALIDER', HW / 2, 262, 14, 'center', '#fff');
+  if (blink) text('TOUCHE / ENTRÉE POUR VALIDER', HW / 2, OY + 262, 14, 'center', '#fff');
 }
 
 function drawCcSelect() {
   hctx.fillStyle = 'rgba(8,5,25,0.45)';
-  hctx.fillRect(0, 0, HW, HH);
-  text('CHOISIS TA CATÉGORIE', HW / 2, 18, 22, 'center', '#40e0ff');
+  hctx.fillRect(0, 0, HW, HB);
+  text('CHOISIS TA CATÉGORIE', HW / 2, OY + 18, 22, 'center', '#40e0ff');
   CC_CLASSES.forEach((cc, i) => {
     const sel = i === ccSel;
-    const y = 64 + i * 44;
+    const y = OY + 64 + i * 44;
     if (sel) {
       hctx.fillStyle = 'rgba(64,224,255,0.18)';
       hctx.beginPath(); hctx.roundRect(HW / 2 - 130, y - 6, 260, 38, 8); hctx.fill();
@@ -2136,31 +2145,31 @@ function drawCcSelect() {
     text(cc.desc, HW / 2 + 60, y + 5, 13, 'right', sel ? '#fff' : '#9ab');
   });
   const recs = recordsFor(MAPS[mapSel].id, ccSel);
-  text(`RECORDS — ${MAPS[mapSel].name} · ${CC_CLASSES[ccSel].label}`, HW / 2, 212, 11, 'center', '#ff50dc');
-  if (recs.length === 0) text('Aucun temps enregistré — à toi de jouer !', HW / 2, 232, 11, 'center', '#9ab');
+  text(`RECORDS — ${MAPS[mapSel].name} · ${CC_CLASSES[ccSel].label}`, HW / 2, OY + 212, 11, 'center', '#ff50dc');
+  if (recs.length === 0) text('Aucun temps enregistré — à toi de jouer !', HW / 2, OY + 232, 11, 'center', '#9ab');
   recs.slice(0, 3).forEach((r, i) => {
-    text(`${i + 1}. ${fmtTime(r.t)}  ${r.name}`, HW / 2, 230 + i * 16, 12, 'center', i === 0 ? '#ffd24a' : '#cfe');
+    text(`${i + 1}. ${fmtTime(r.t)}  ${r.name}`, HW / 2, OY + 230 + i * 16, 12, 'center', i === 0 ? '#ffd24a' : '#cfe');
   });
   const blink = (perfNow / 500 | 0) % 2 === 0;
-  if (blink) text('TOUCHE / ENTRÉE POUR COURIR !', HW / 2, 292, 13, 'center', '#fff');
+  if (blink) text('TOUCHE / ENTRÉE POUR COURIR !', HW / 2, OY + 292, 13, 'center', '#fff');
 }
 
 function drawCountdown() {
   const n = Math.ceil(3 - countdownT);
   if (n !== lastBeep && n > 0) { beep(440, 0.15, 'square'); lastBeep = n; }
-  if (n > 0) text(String(n), HW / 2, 100, 80, 'center', '#ffd21f');
+  if (n > 0) text(String(n), HW / 2, OY + 100, 80, 'center', '#ffd21f');
   else {
     if (lastBeep !== 0) { beep(880, 0.4, 'square'); lastBeep = 0; }
-    if (countdownT < 3.7) text('GO!', HW / 2, 100, 80, 'center', '#40e060');
+    if (countdownT < 3.7) text('GO!', HW / 2, OY + 100, 80, 'center', '#40e060');
   }
 }
 
 function drawFinish() {
   hctx.fillStyle = 'rgba(5,5,25,0.7)';
-  hctx.fillRect(0, 0, HW, HH);
-  text('COURSE TERMINÉE !', HW / 2, 12, 22, 'center', '#ffd21f');
-  if (newRecordRank === 0) text('★ NOUVEAU RECORD ! ★', HW / 2, 36, 15, 'center', '#ffd24a');
-  else if (newRecordRank > 0) text(`Top ${newRecordRank + 1} local !`, HW / 2, 36, 13, 'center', '#9fe');
+  hctx.fillRect(0, 0, HW, HB);
+  text('COURSE TERMINÉE !', HW / 2, OY + 12, 22, 'center', '#ffd21f');
+  if (newRecordRank === 0) text('★ NOUVEAU RECORD ! ★', HW / 2, OY + 36, 15, 'center', '#ffd24a');
+  else if (newRecordRank > 0) text(`Top ${newRecordRank + 1} local !`, HW / 2, OY + 36, 13, 'center', '#9fe');
   const sorted = [...karts].sort((a, b) => {
     if (a.finishTime && b.finishTime) return a.finishTime - b.finishTime;
     if (a.finishTime) return -1;
@@ -2169,15 +2178,15 @@ function drawFinish() {
   });
   sorted.forEach((k, i) => {
     const ch = CHARACTERS[k.charIdx];
-    const y = 58 + i * 22;
+    const y = OY + 58 + i * 22;
     text(PLACE_TXT[i], HW / 2 - 130, y, 14, 'left', PLACE_COL[i]);
     text(ch.name + (k.isPlayer ? '  ★' : ''), HW / 2 - 70, y, 14, 'left', k.isPlayer ? '#fff' : ch.color);
     if (k.finishTime) text(fmtTime(k.finishTime), HW / 2 + 130, y, 12, 'right', '#cfe');
   });
   const recs = recordsFor(MAPS[mapSel].id, ccSel);
-  if (recs.length) text(`Record local : ${fmtTime(recs[0].t)} (${recs[0].name})`, HW / 2, HH - 44, 11, 'center', '#ff50dc');
+  if (recs.length) text(`Record local : ${fmtTime(recs[0].t)} (${recs[0].name})`, HW / 2, HB - 44, 11, 'center', '#ff50dc');
   const blink = (perfNow / 500 | 0) % 2 === 0;
-  if (blink) text('TOUCHE / ENTRÉE POUR REJOUER', HW / 2, HH - 24, 13, 'center', '#fff');
+  if (blink) text('TOUCHE / ENTRÉE POUR REJOUER', HW / 2, HB - 24, 13, 'center', '#fff');
 }
 
 /* ---------------- Resize ---------------- */
@@ -2278,9 +2287,12 @@ function frame(t) {
   updateCamera(dt);
   composer.render();
 
-  const S = hud.width / HW;
+  const S = Math.min(hud.width / 480, hud.height / HH);
+  HW = Math.round(hud.width / S);
+  HB = Math.round(hud.height / S);
+  OY = Math.max(0, Math.round((HB - HH) / 2));
   hctx.setTransform(S, 0, 0, S, 0, 0);
-  hctx.clearRect(0, 0, HW, HH);
+  hctx.clearRect(0, 0, HW, HB);
   if (state === 'menu') drawMenu();
   else if (state === 'map') drawMapSelect();
   else if (state === 'cc') drawCcSelect();
@@ -2290,7 +2302,7 @@ function frame(t) {
     if (state === 'finish' && finishDelay <= 0) drawFinish();
   }
   if (window.__iamUpdateReady)
-    text('✨ Mise à jour prête — appliquée après la course', HW / 2, HH - 14, 9, 'center', '#9fe');
+    text('✨ Mise à jour prête — appliquée après la course', HW / 2, HB - 14, 9, 'center', '#9fe');
 
   updateEngine(player ? player.speed : 0, state === 'race' || state === 'countdown');
 }

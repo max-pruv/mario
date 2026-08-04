@@ -39,9 +39,29 @@
 
 <script type="module" src="./game.js"></script>
 <script>
+  // Auto-update: the service worker precaches everything for offline play,
+  // and we aggressively look for new releases — on every launch, whenever the
+  // app regains focus (e.g. reopened from the home screen), and every 3
+  // minutes while playing. When a new version is ready, game.js applies it at
+  // the next safe moment (menu or end of race) by reloading.
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js').catch(() => {});
+      navigator.serviceWorker.register('./sw.js').then((reg) => {
+        const check = () => reg.update().catch(() => {});
+        check();
+        setInterval(check, 3 * 60 * 1000);
+        document.addEventListener('visibilitychange', () => {
+          if (!document.hidden) check();
+        });
+        window.addEventListener('focus', check);
+      }).catch(() => {});
+
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        // First install: a controller appears where there was none — no reload needed.
+        if (!window.__iamHadController) { window.__iamHadController = true; return; }
+        window.__iamUpdateReady = true; // game.js reloads when it's safe
+      });
+      window.__iamHadController = !!navigator.serviceWorker.controller;
     });
   }
 </script>

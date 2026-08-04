@@ -1275,6 +1275,13 @@ function frame(t) {
   const itemPressed = input.item && !prevItem;
   prevStart = input.start; prevLeft = input.left; prevRight = input.right; prevItem = input.item;
 
+  // apply a pending app update as soon as we're not mid-race
+  if (window.__iamUpdateReady && state !== 'race' && state !== 'countdown') {
+    window.__iamUpdateReady = false;
+    location.reload();
+    return;
+  }
+
   if (state === 'menu') {
     if (leftPressed) menuChar = (menuChar + CHARACTERS.length - 1) % CHARACTERS.length;
     if (rightPressed) menuChar = (menuChar + 1) % CHARACTERS.length;
@@ -1323,6 +1330,8 @@ function frame(t) {
     if (state === 'countdown' || (state === 'race' && countdownT < 3.7)) drawCountdown();
     if (state === 'finish' && finishDelay <= 0) drawFinish();
   }
+  if (window.__iamUpdateReady)
+    text('✨ Mise à jour prête — appliquée après la course', HW / 2, HH - 14, 9, 'center', '#9fe');
 
   updateEngine(player ? player.speed : 0, state === 'race' || state === 'countdown');
 }

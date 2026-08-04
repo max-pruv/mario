@@ -44,11 +44,26 @@ npx serve .        # ou : python3 -m http.server
 - Sons synthétisés en WebAudio (moteur, compte à rebours, objets)
 - PWA complète : hors ligne via service worker, icônes, plein écran paysage
 
-## 🚀 Déploiement
+## 🚀 Déploiement (même modèle que le repo `minecraft`)
 
-Le workflow `.github/workflows/deploy.yml` déploie automatiquement sur GitHub Pages à chaque push sur `main`.
+Le jeu est un site 100 % statique, sans build — exactement comme [max-pruv/minecraft](https://github.com/max-pruv/minecraft), qui est servi gratuitement sur `max-pruv.github.io/minecraft`.
 
-À faire une seule fois : **Settings → Pages → Source : « GitHub Actions »**.
+GitHub Pages est **gratuit pour les repos publics** (c'est un repo privé qui demande un plan payant). À faire une seule fois :
+
+1. **Settings → General → Danger Zone → Change visibility → Public**
+2. **Settings → Pages → Source : « Deploy from a branch » → `main` / `/ (root)`**
+
+→ le jeu est servi sur `https://max-pruv.github.io/mario/`. Chaque push sur `main` met le site à jour automatiquement, sans workflow ni CI.
+
+## 🔄 Mises à jour automatiques (même installé)
+
+Les clients installés (PWA) se mettent à jour tout seuls :
+
+- le service worker sert tout depuis le cache (hors ligne instantané) **et** re-télécharge chaque fichier en arrière-plan à chaque usage (*stale-while-revalidate*) ;
+- l'app vérifie s'il existe une nouvelle version **au lancement, à chaque retour au premier plan, et toutes les 3 minutes** pendant le jeu ;
+- quand une nouvelle version est prête, elle s'applique automatiquement **dès que tu n'es pas en pleine course** (au menu ou après l'arrivée) — un petit message « ✨ Mise à jour prête » s'affiche en attendant.
+
+Côté release : bumper `CACHE_VERSION` dans `sw.js` à chaque publication (comme sur le repo minecraft) pour forcer la bascule immédiate et coordonnée de tous les fichiers.
 
 ## 🧱 Crédits
 

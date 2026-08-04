@@ -1447,7 +1447,8 @@ function makeKart(charIdx, isPlayer, gridPos) {
 }
 
 let karts = [], player = null, bananas = [], shells = [];
-let state = 'menu';
+// title -> cc (étape 1) -> char (étape 2) -> map (étape 3) -> countdown -> race -> finish
+let state = 'title';
 let menuChar = 0, mapSel = 0, ccSel = 1;
 let ccMul = CC_CLASSES[1].mul;
 let countdownT = 0, raceTime = 0, finishDelay = 0;
@@ -1951,11 +1952,28 @@ function spawnConfetti() {
 
 /* ---------------- Camera ---------------- */
 function updateCamera(dt) {
-  if (state === 'menu' || state === 'map' || state === 'cc') {
+  if (state === 'title' || state === 'cc') {
+    // wide orbit over the start grid
     const t = perfNow * 0.0003;
     const c = center[(N - 20) % N];
     camera.position.set(c.x + Math.cos(t) * 130, 55 + Math.sin(t * 0.7) * 12, c.y + Math.sin(t) * 130);
     camera.lookAt(c.x, 18, c.y);
+    sun.position.set(c.x + 300, 500, c.y + 120);
+    sun.target.position.set(c.x, 0, c.y);
+  } else if (state === 'char') {
+    // MK-style close-up: slow orbit around the selected kart
+    const t = perfNow * 0.0006;
+    camera.position.set(player.x + Math.cos(t) * 85, 34, player.y + Math.sin(t) * 85);
+    camera.lookAt(player.x, 14, player.y);
+    sun.position.set(player.x + 300, 500, player.y + 120);
+    sun.target.position.set(player.x, 0, player.y);
+  } else if (state === 'map') {
+    // circuit preview: fly along the track like the MK course intro
+    const i = Math.floor(perfNow * 0.012) % N;
+    const c = center[i];
+    const ahead = center[(i + 26) % N];
+    camera.position.set(c.x - c.dirx * 40, 95, c.y - c.diry * 40);
+    camera.lookAt(ahead.x, 12, ahead.y);
     sun.position.set(c.x + 300, 500, c.y + 120);
     sun.target.position.set(c.x, 0, c.y);
   } else {
@@ -2094,59 +2112,125 @@ function drawHUD() {
   hctx.globalAlpha = 1;
 }
 
-function drawMenu() {
-  hctx.fillStyle = 'rgba(8,5,25,0.35)';
-  hctx.fillRect(0, 0, HW, HB);
-  text('IAM KART', HW / 2, OY + 26, 54, 'center', '#40e0ff');
-  text('Inès · Alice · Marlon', HW / 2, OY + 84, 16, 'center', '#ff50dc');
-  text('Choisis ton pilote', HW / 2, OY + 118, 12, 'center', '#cfe');
+// mini-thumbnails of every circuit, pre-rendered once for the map carousel
+const mapThumbs = MAPS.map((m) => {
+  const cl = sampleCenterline(m.ctrl);
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  g.fillStyle = 'rgba(10,10,30,0.75)';
+  g.fillRect(0, 0, 64, 64);
+  g.strokeStyle = '#e8e8e8'; g.lineWidth = 3.5; g.lineJoin = 'round';
+  g.beginPath();
+  g.moveTo(cl[0].x / 2048 * 64, cl[0].y / 2048 * 64);
+  for (let i = 1; i < N; i += 6) g.lineTo(cl[i].x / 2048 * 64, cl[i].y / 2048 * 64);
+  g.closePath(); g.stroke();
+  return c;
+});
 
-  const ch = CHARACTERS[menuChar];
-  text('◀', HW / 2 - 100, OY + 168, 26, 'center', '#fff');
-  text('▶', HW / 2 + 100, OY + 168, 26, 'center', '#fff');
-  text(ch.name, HW / 2, OY + 172, 22, 'center', ch.color);
-
-  const blink = (perfNow / 500 | 0) % 2 === 0;
-  if (blink) text('TOUCHE / ENTRÉE POUR CONTINUER', HW / 2, OY + 250, 14, 'center', '#fff');
-  text('← → choisir · A/↑ gaz · B/Shift objet', HW / 2, OY + 292, 10, 'center', '#9ab');
+function stepHeader(step, label) {
+  text(`ÉTAPE ${step}/3`, HW / 2, OY + 14, 11, 'center', '#ff50dc');
+  text(label, HW / 2, OY + 28, 22, 'center', '#40e0ff');
+  if (step > 1) text('B = retour', 12, OY + 14, 10, 'left', '#9ab');
 }
 
-function drawMapSelect() {
-  hctx.fillStyle = 'rgba(8,5,25,0.45)';
+function drawTitle() {
+  hctx.fillStyle = 'rgba(8,5,25,0.35)';
   hctx.fillRect(0, 0, HW, HB);
-  text('CHOISIS TON CIRCUIT', HW / 2, OY + 18, 22, 'center', '#40e0ff');
-  const map = MAPS[mapSel];
-  text('◀', HW / 2 - 130, OY + 120, 30, 'center', '#fff');
-  text('▶', HW / 2 + 130, OY + 120, 30, 'center', '#fff');
-  text(map.name.toUpperCase(), HW / 2, OY + 60, 30, 'center', '#ffd24a');
-  text(map.desc, HW / 2, OY + 98, 12, 'center', '#cfe');
-  hctx.globalAlpha = 0.95;
-  hctx.drawImage(track.miniCanvas, HW / 2 - 50, OY + 122, 100, 100);
-  hctx.globalAlpha = 1;
-  text(`${mapSel + 1} / ${MAPS.length}`, HW / 2, OY + 232, 11, 'center', '#9ab');
+  text('IAM KART', HW / 2, OY + 50, 58, 'center', '#40e0ff');
+  text('Inès · Alice · Marlon', HW / 2, OY + 112, 16, 'center', '#ff50dc');
   const blink = (perfNow / 500 | 0) % 2 === 0;
-  if (blink) text('TOUCHE / ENTRÉE POUR VALIDER', HW / 2, OY + 262, 14, 'center', '#fff');
+  if (blink) text('TOUCHE / ENTRÉE POUR COMMENCER', HW / 2, OY + 220, 15, 'center', '#fff');
+  text('← → choisir · Entrée valider · B retour · A gaz · B objet en course', HW / 2, OY + 292, 9, 'center', '#9ab');
 }
 
 function drawCcSelect() {
   hctx.fillStyle = 'rgba(8,5,25,0.45)';
   hctx.fillRect(0, 0, HW, HB);
-  text('CHOISIS TA CATÉGORIE', HW / 2, OY + 18, 22, 'center', '#40e0ff');
+  stepHeader(1, 'CHOISIS TA CYLINDRÉE');
   CC_CLASSES.forEach((cc, i) => {
     const sel = i === ccSel;
-    const y = OY + 64 + i * 44;
+    const y = OY + 84 + i * 52;
     if (sel) {
       hctx.fillStyle = 'rgba(64,224,255,0.18)';
-      hctx.beginPath(); hctx.roundRect(HW / 2 - 130, y - 6, 260, 38, 8); hctx.fill();
+      hctx.strokeStyle = '#40e0ff';
+      hctx.lineWidth = 2;
+      hctx.beginPath(); hctx.roundRect(HW / 2 - 140, y - 8, 280, 44, 10); hctx.fill(); hctx.stroke();
     }
-    text(cc.label, HW / 2 - 60, y, 22, 'left', sel ? '#ffd24a' : '#eee');
-    text(cc.desc, HW / 2 + 60, y + 5, 13, 'right', sel ? '#fff' : '#9ab');
+    text(cc.label, HW / 2 - 70, y, 24, 'left', sel ? '#ffd24a' : '#eee');
+    text(cc.desc, HW / 2 + 70, y + 7, 14, 'right', sel ? '#fff' : '#9ab');
   });
-  const recs = recordsFor(MAPS[mapSel].id, ccSel);
-  text(`RECORDS — ${MAPS[mapSel].name} · ${CC_CLASSES[ccSel].label}`, HW / 2, OY + 212, 11, 'center', '#ff50dc');
-  if (recs.length === 0) text('Aucun temps enregistré — à toi de jouer !', HW / 2, OY + 232, 11, 'center', '#9ab');
-  recs.slice(0, 3).forEach((r, i) => {
-    text(`${i + 1}. ${fmtTime(r.t)}  ${r.name}`, HW / 2, OY + 230 + i * 16, 12, 'center', i === 0 ? '#ffd24a' : '#cfe');
+  const blink = (perfNow / 500 | 0) % 2 === 0;
+  if (blink) text('TOUCHE / ENTRÉE POUR VALIDER', HW / 2, OY + 268, 14, 'center', '#fff');
+}
+
+function drawCharSelect() {
+  // no dark overlay: the 3D kart close-up IS the star of this screen
+  stepHeader(2, 'CHOISIS TON PILOTE');
+  const ch = CHARACTERS[menuChar];
+  text('◀', HW / 2 - 120, OY + 130, 30, 'center', '#fff');
+  text('▶', HW / 2 + 120, OY + 130, 30, 'center', '#fff');
+  text(ch.name, HW / 2, OY + 62, 26, 'center', ch.color);
+  // MK-style character grid
+  const tile = 34, gap = 8;
+  const total = CHARACTERS.length * tile + (CHARACTERS.length - 1) * gap;
+  const x0 = HW / 2 - total / 2;
+  CHARACTERS.forEach((c, i) => {
+    const x = x0 + i * (tile + gap);
+    const y = OY + 232;
+    const sel = i === menuChar;
+    hctx.fillStyle = c.color;
+    hctx.globalAlpha = sel ? 1 : 0.55;
+    hctx.beginPath(); hctx.roundRect(x, y, tile, tile, 8); hctx.fill();
+    hctx.globalAlpha = 1;
+    if (sel) {
+      hctx.strokeStyle = '#fff';
+      hctx.lineWidth = 3;
+      hctx.beginPath(); hctx.roundRect(x - 2, y - 2, tile + 4, tile + 4, 9); hctx.stroke();
+    }
+    // helmet dot
+    hctx.fillStyle = c.helmet;
+    hctx.beginPath(); hctx.arc(x + tile / 2, y + 12, 7, 0, TAU); hctx.fill();
+    text(c.name.slice(0, 3), x + tile / 2, y + tile + 4, 8, 'center', sel ? '#fff' : '#9ab');
+  });
+  const blink = (perfNow / 500 | 0) % 2 === 0;
+  if (blink) text('TOUCHE / ENTRÉE POUR VALIDER', HW / 2, OY + 292, 13, 'center', '#fff');
+}
+
+function drawMapSelect() {
+  // the 3D flythrough behind is the live preview — keep the veil light
+  hctx.fillStyle = 'rgba(8,5,25,0.25)';
+  hctx.fillRect(0, 0, HW, HB);
+  stepHeader(3, 'CHOISIS TON CIRCUIT');
+  const map = MAPS[mapSel];
+  text('◀', HW / 2 - 150, OY + 110, 30, 'center', '#fff');
+  text('▶', HW / 2 + 150, OY + 110, 30, 'center', '#fff');
+  text(map.name.toUpperCase(), HW / 2, OY + 58, 28, 'center', '#ffd24a');
+  text(map.desc, HW / 2, OY + 92, 12, 'center', '#cfe');
+  hctx.globalAlpha = 0.95;
+  hctx.drawImage(track.miniCanvas, HW / 2 - 44, OY + 112, 88, 88);
+  hctx.globalAlpha = 1;
+  // best local record for the chosen cc
+  const recs = recordsFor(map.id, ccSel);
+  if (recs.length)
+    text(`Record ${CC_CLASSES[ccSel].label} : ${fmtTime(recs[0].t)} (${recs[0].name})`, HW / 2, OY + 204, 11, 'center', '#ff50dc');
+  else
+    text(`Aucun record en ${CC_CLASSES[ccSel].label} — à toi de jouer !`, HW / 2, OY + 204, 11, 'center', '#9ab');
+  // carousel of every circuit
+  const th = 40, gap = 10;
+  const total = MAPS.length * th + (MAPS.length - 1) * gap;
+  const x0 = HW / 2 - total / 2;
+  MAPS.forEach((m, i) => {
+    const x = x0 + i * (th + gap);
+    const y = OY + 226;
+    hctx.globalAlpha = i === mapSel ? 1 : 0.55;
+    hctx.drawImage(mapThumbs[i], x, y, th, th);
+    hctx.globalAlpha = 1;
+    if (i === mapSel) {
+      hctx.strokeStyle = '#40e0ff';
+      hctx.lineWidth = 2.5;
+      hctx.strokeRect(x - 2, y - 2, th + 4, th + 4);
+    }
   });
   const blink = (perfNow / 500 | 0) % 2 === 0;
   if (blink) text('TOUCHE / ENTRÉE POUR COURIR !', HW / 2, OY + 292, 13, 'center', '#fff');
@@ -2235,12 +2319,26 @@ function frame(t) {
     return;
   }
 
-  if (state === 'menu') {
+  if (state === 'title') {
+    if (karts.length === 0) resetRace(menuChar);
+    if (startPressed) { state = 'cc'; beep(560, 0.08, 'square'); }
+  } else if (state === 'cc') {
+    // étape 1/3 : cylindrée
+    if (leftPressed || rightPressed) {
+      ccSel = (ccSel + (rightPressed ? 1 : CC_CLASSES.length - 1)) % CC_CLASSES.length;
+      beep(480, 0.06, 'square');
+    }
+    if (itemPressed) { state = 'title'; beep(360, 0.08, 'square'); }
+    else if (startPressed) { ccMul = CC_CLASSES[ccSel].mul; state = 'char'; beep(560, 0.08, 'square'); }
+  } else if (state === 'char') {
+    // étape 2/3 : pilote (gros plan MK sur le kart)
     if (leftPressed) menuChar = (menuChar + CHARACTERS.length - 1) % CHARACTERS.length;
     if (rightPressed) menuChar = (menuChar + 1) % CHARACTERS.length;
-    if (karts.length === 0 || karts[0].charIdx !== menuChar) resetRace(menuChar);
-    if (startPressed) { state = 'map'; beep(560, 0.08, 'square'); }
+    if (karts.length === 0 || karts[0].charIdx !== menuChar) { resetRace(menuChar); beep(480, 0.06, 'square'); }
+    if (itemPressed) { state = 'cc'; beep(360, 0.08, 'square'); }
+    else if (startPressed) { state = 'map'; beep(560, 0.08, 'square'); }
   } else if (state === 'map') {
+    // étape 3/3 : circuit (survol 3D en direct + vignettes)
     let changed = false;
     if (leftPressed) { mapSel = (mapSel + MAPS.length - 1) % MAPS.length; changed = true; }
     if (rightPressed) { mapSel = (mapSel + 1) % MAPS.length; changed = true; }
@@ -2249,12 +2347,8 @@ function frame(t) {
       resetRace(menuChar);
       beep(480, 0.06, 'square');
     }
-    if (startPressed) { state = 'cc'; beep(560, 0.08, 'square'); }
-  } else if (state === 'cc') {
-    if (leftPressed) ccSel = (ccSel + CC_CLASSES.length - 1) % CC_CLASSES.length;
-    if (rightPressed) ccSel = (ccSel + 1) % CC_CLASSES.length;
-    if (startPressed) {
-      ccMul = CC_CLASSES[ccSel].mul;
+    if (itemPressed) { state = 'char'; beep(360, 0.08, 'square'); }
+    else if (startPressed) {
       resetRace(menuChar);
       state = 'countdown';
       countdownT = 0; lastBeep = -1;
@@ -2286,7 +2380,7 @@ function frame(t) {
   }
   if (state === 'finish') {
     if (finishDelay > 0) finishDelay -= dt;
-    else if (startPressed) { state = 'menu'; resetRace(menuChar); }
+    else if (startPressed) { state = 'cc'; resetRace(menuChar); }
   }
   if (itemPressed && state === 'race') useItem(player);
 
@@ -2301,9 +2395,10 @@ function frame(t) {
   OY = Math.max(0, Math.round((HB - HH) / 2));
   hctx.setTransform(S, 0, 0, S, 0, 0);
   hctx.clearRect(0, 0, HW, HB);
-  if (state === 'menu') drawMenu();
-  else if (state === 'map') drawMapSelect();
+  if (state === 'title') drawTitle();
   else if (state === 'cc') drawCcSelect();
+  else if (state === 'char') drawCharSelect();
+  else if (state === 'map') drawMapSelect();
   else {
     drawHUD();
     if (state === 'countdown' || (state === 'race' && countdownT < 3.7)) drawCountdown();

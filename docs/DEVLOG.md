@@ -2,6 +2,11 @@
 
 Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker (`sw.js`) : chaque bump déclenche la mise à jour automatique de tous les clients installés.
 
+## v9 — Lancement de course en 3 étapes façon MK
+
+- Écran titre, puis **① cylindrée** (50/100/150cc) → **② pilote** (gros plan 3D sur le kart qui tourne + grille des 8 personnages) → **③ circuit** avec preview : survol 3D du circuit en direct (caméra qui suit la piste comme l'intro des courses MK), grande minimap, carrousel des 5 vignettes, record local de la cylindrée choisie.
+- Navigation retour avec B à chaque étape ; rejouer renvoie à l'étape 1.
+
 ## v8 — Paysage obligatoire sur mobile
 
 - Retour du mode paysage seul sur téléphone (choix gyro) : en portrait, un écran « Tourne ton téléphone » recouvre le jeu et **toute la partie se met en pause** (pas de progression IA pendant la rotation).

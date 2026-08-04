@@ -2,6 +2,11 @@
 
 Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker (`sw.js`) : chaque bump déclenche la mise à jour automatique de tous les clients installés.
 
+## v8 — Paysage obligatoire sur mobile
+
+- Retour du mode paysage seul sur téléphone (choix gyro) : en portrait, un écran « Tourne ton téléphone » recouvre le jeu et **toute la partie se met en pause** (pas de progression IA pendant la rotation).
+- L'écran rappelle l'astuce du verrou de rotation iOS pour jouer au gyroscope sans bascule.
+
 ## v7 — Bandeau d'installation
 
 - Bandeau intelligent hors app installée : sur iOS, guide en 2 taps (Partager → « Sur l'écran d'accueil » — Apple interdit l'installation programmatique) ; sur Android/Chrome, **vrai bouton Installer en 1 clic** via `beforeinstallprompt`.

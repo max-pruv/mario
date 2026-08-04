@@ -140,5 +140,24 @@ html, body {
   padding: 4px 6px;
 }
 
-/* Portrait is fully playable now — no blocking overlay. */
-#rotate-hint { display: none; }
+/* ---------- Landscape-only overlay (the game pauses in portrait) ---------- */
+#rotate-hint {
+  display: none;
+  position: fixed; inset: 0;
+  z-index: 40;
+  background: rgba(8,8,22,.94);
+  color: #fff;
+  text-align: center;
+  padding: 34vh 8vw 0;
+  font: bold 20px/1.5 system-ui, sans-serif;
+}
+#rotate-hint div { font-size: 44px; margin-bottom: 12px; }
+#rotate-hint small {
+  display: block;
+  margin-top: 18px;
+  font: 500 12px/1.6 system-ui, sans-serif;
+  color: #9ab4d0;
+}
+@media (pointer: coarse) and (orientation: portrait) {
+  #rotate-hint { display: block; }
+}

@@ -2109,8 +2109,6 @@ function drawMenu() {
   const blink = (perfNow / 500 | 0) % 2 === 0;
   if (blink) text('TOUCHE / ENTRÉE POUR CONTINUER', HW / 2, OY + 250, 14, 'center', '#fff');
   text('← → choisir · A/↑ gaz · B/Shift objet', HW / 2, OY + 292, 10, 'center', '#9ab');
-  if (innerHeight > innerWidth && matchMedia('(pointer: coarse)').matches)
-    text('Astuce : verrouille la rotation iOS pour jouer au gyro en paysage 🔒', HW / 2, OY + 270, 9, 'center', '#8ac');
 }
 
 function drawMapSelect() {
@@ -2226,6 +2224,14 @@ function frame(t) {
   if (window.__iamUpdateReady && state !== 'race' && state !== 'countdown') {
     window.__iamUpdateReady = false;
     location.reload();
+    return;
+  }
+
+  // landscape only on mobile: in portrait the rotate overlay covers the
+  // screen (CSS) and the whole game pauses — no unfair AI progress, and no
+  // fight with the gyroscope when iOS flips the orientation
+  if (innerHeight > innerWidth && matchMedia('(pointer: coarse)').matches) {
+    updateEngine(0, false);
     return;
   }
 

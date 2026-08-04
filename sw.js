@@ -1,10 +1,12 @@
-/* Kart Dash — service worker (offline PWA) */
-const CACHE = 'kart-dash-v1';
+/* IAM Kart — service worker (offline PWA) */
+const CACHE = 'iam-kart-v2';
 const ASSETS = [
   './',
   './index.html',
   './style.css',
   './game.js',
+  './vendor/three.module.js',
+  './vendor/three.core.min.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',

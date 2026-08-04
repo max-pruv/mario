@@ -1,8 +1,8 @@
-# 🏁 Kart Dash — Retro Racing
+# 🏁 IAM Kart — Inès · Alice · Marlon
 
-Un jeu de kart rétro façon **Mario Kart SNES** (rendu pseudo-3D "Mode 7"), jouable directement dans le navigateur et **installable sur téléphone** comme une application (PWA).
+Un jeu de kart **3D** inspiré de Mario Kart, avec des **vaisseaux lumineux farfelus** façon Star Wars et des avions qui traversent le ciel. Jouable directement dans le navigateur et **installable sur téléphone** comme une application (PWA), y compris hors ligne.
 
-100 % vanilla JS / Canvas — aucune dépendance, tous les graphismes et sons sont générés par code (assets originaux).
+Moteur **Three.js (WebGL)** — éclairage temps réel, ombres portées, ambiance coucher de soleil, néons. Tous les modèles 3D, textures et sons sont générés par code (assets 100 % originaux).
 
 ## 🎮 Jouer
 
@@ -34,11 +34,13 @@ npx serve .        # ou : python3 -m http.server
 
 ## ✨ Fonctionnalités
 
-- Rendu **Mode 7** (sol texturé en perspective, comme sur SNES) à 60 FPS
-- 8 personnages jouables, 7 adversaires IA avec rubber-banding
-- 3 tours, classement en temps réel, chrono, mini-carte
-- **Objets** : 🍄 champignon turbo, 🍌 banane, ⚡ éclair
-- Boîtes à objets, pads de boost, mini-turbo de drift
+- **Rendu 3D WebGL** : éclairage crépusculaire, ombres dynamiques, brouillard atmosphérique, tone mapping filmique
+- **Vaisseaux lumineux farfelus** : chasseur à 4 ailes, soucoupe volante, donut néon, fusée rétro — avec halos et traînées lumineuses
+- **Avions cartoon** avec hélices et traînées de condensation
+- 8 personnages (Inès, Alice, Marlon, Rex, Nova, Zip, Violet, Blaze), 7 adversaires IA avec rubber-banding
+- 3 tours, classement temps réel, chrono, mini-carte
+- **Objets** : 🍄 champignon turbo, 🍌 banane, ⚡ éclair — boîtes à objets holographiques, pads de boost animés, mini-turbo de drift
+- Portique de départ avec feux tricolores, rails néon pulsants le long de la piste
 - Sons synthétisés en WebAudio (moteur, compte à rebours, objets)
 - PWA complète : hors ligne via service worker, icônes, plein écran paysage
 
@@ -47,3 +49,7 @@ npx serve .        # ou : python3 -m http.server
 Le workflow `.github/workflows/deploy.yml` déploie automatiquement sur GitHub Pages à chaque push sur `main`.
 
 À faire une seule fois : **Settings → Pages → Source : « GitHub Actions »**.
+
+## 🧱 Crédits
+
+- [Three.js](https://threejs.org) (MIT) — embarqué dans `vendor/` pour le mode hors ligne

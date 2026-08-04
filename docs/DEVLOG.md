@@ -2,6 +2,13 @@
 
 Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker (`sw.js`) : chaque bump déclenche la mise à jour automatique de tous les clients installés.
 
+## v11 — Vraies villes : immeubles composites par style
+
+- Fini les blocs étirés : **générateur d'immeubles composites** fusionnés en quelques draw calls — tours à redans avec parapets, tours cylindriques, antennes, châteaux d'eau, clim en toiture ; **immeubles haussmanniens** à toits mansardés et cheminées (Paris) ; **villas pastel à toits de tuiles** (Nice, Biarritz).
+- **Fenêtres à taille réelle** : les UV des façades sont calées sur les dimensions du bâtiment (un étage = une rangée), avec 3 styles de façades peintes (verre moderne éclairé chaud/froid, pierre de taille à balcons, murs pastel à volets) et teintes murales variées par immeuble.
+- **Enseignes néon lumineuses** en toiture (IAM, KART, GP ★, TURBO) sur Néon et New York, qui rayonnent dans le bloom.
+- Contraste des circuits de jour renforcé (brouillard/lumière), halos d'objets adoucis.
+
 ## v10 — Refonte graphique majeure : relief, vrais karts, vrais pilotes
 
 - **Terrain 3D** : collines procédurales, circuits avec montées/descentes (amplitude par circuit) et **virages relevés** (banking) façon MK8 — route, bordures, rails, pads et ligne de départ épousent le relief ; le sol est un maillage déplacé aplani sous la piste.

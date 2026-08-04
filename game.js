@@ -2253,6 +2253,8 @@ function frame(t) {
       state = 'countdown';
       countdownT = 0; lastBeep = -1;
       tryFullscreen();
+      const ib = document.getElementById('install-banner');
+      if (ib) ib.hidden = true; // ne jamais gêner la course
     }
   } else if (state === 'countdown') {
     countdownT += dt;

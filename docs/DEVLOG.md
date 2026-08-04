@@ -2,6 +2,17 @@
 
 Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker (`sw.js`) : chaque bump déclenche la mise à jour automatique de tous les clients installés.
 
+## v7 — Bandeau d'installation
+
+- Bandeau intelligent hors app installée : sur iOS, guide en 2 taps (Partager → « Sur l'écran d'accueil » — Apple interdit l'installation programmatique) ; sur Android/Chrome, **vrai bouton Installer en 1 clic** via `beforeinstallprompt`.
+- Fermable, mémorisé 7 jours, masqué automatiquement en course, jamais affiché dans l'app installée.
+
+## v6 — Plein écran, portrait, déblocage des vieux service workers
+
+- Suppression du letterbox 3:2 : le jeu remplit 100 % de l'écran (100dvh), HUD adaptatif au ratio réel.
+- Mode portrait entièrement jouable (FOV élargi) — répond à l'impossibilité de verrouiller l'orientation sur iOS web quand on joue au gyroscope.
+- SW : navigation forcée des pages coincées sur les caches pré-v3 (elles n'avaient pas la logique d'auto-reload).
+
 ## v5 — Circuits, catégories cc, gameplay MK8, records
 
 - **5 circuits sélectionnables** : Circuit Néon (crépuscule mégapole), **Paris** (jour, Tour Eiffel), **Nice** (Promenade au bord de la mer, palmiers), **New York** (minuit, gratte-ciel), **Biarritz** (couchant sur l'océan, phare à faisceau tournant). Chaque circuit a son tracé, son ciel, son éclairage, sa ville, ses arbres et ses rails colorés — tout est paramétré par thème dans `MAPS`.

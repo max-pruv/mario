@@ -100,5 +100,45 @@ html, body {
 }
 #btnGyro.on { background: rgba(30,160,220,.65); border-color: #40e0ff; }
 
+/* ---------- Install banner ---------- */
+#install-banner {
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(92vw, 460px);
+  padding: 9px 12px;
+  border-radius: 16px;
+  border: 1.5px solid rgba(130,190,255,.55);
+  background: rgba(14,14,34,.88);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: #eef4ff;
+  font: 500 13px/1.35 system-ui, -apple-system, sans-serif;
+  box-shadow: 0 4px 18px rgba(0,0,0,.4);
+}
+#install-banner[hidden] { display: none; }
+#install-banner b { color: #6ad0ff; }
+#install-do {
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #45b8ff, #2a7ae0);
+  color: #fff;
+  font: 700 13px/1 system-ui, sans-serif;
+  padding: 9px 14px;
+  white-space: nowrap;
+}
+#install-close {
+  border: 0;
+  background: transparent;
+  color: rgba(255,255,255,.65);
+  font: 700 15px/1 system-ui, sans-serif;
+  padding: 4px 6px;
+}
+
 /* Portrait is fully playable now — no blocking overlay. */
 #rotate-hint { display: none; }

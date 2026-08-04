@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>IAM Kart — Inès · Alice · Marlon</title>
+<meta name="description" content="IAM Kart : un jeu de kart 3D avec vaisseaux lumineux, jouable dans le navigateur et installable sur mobile.">
+<meta name="theme-color" content="#120a24">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" href="./icons/icon-180.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="IAM Kart">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div id="wrap">
+  <div id="stage">
+    <canvas id="game"></canvas>
+    <canvas id="hud"></canvas>
+  </div>
+
+  <!-- Touch controls -->
+  <div id="controls">
+    <div class="pad left">
+      <button class="btn steer" id="btnL" aria-label="Gauche">◀</button>
+      <button class="btn steer" id="btnR" aria-label="Droite">▶</button>
+    </div>
+    <div class="pad right">
+      <button class="btn item" id="btnB" aria-label="Objet">B</button>
+      <button class="btn gas"  id="btnA" aria-label="Accélérer">A</button>
+    </div>
+  </div>
+
+  <div id="rotate-hint">📱 Tourne ton téléphone en mode paysage&nbsp;!</div>
+</div>
+
+<script type="module" src="./game.js"></script>
+<script>
+  // Auto-update: the service worker precaches everything for offline play,
+  // and we aggressively look for new releases — on every launch, whenever the
+  // app regains focus (e.g. reopened from the home screen), and every 3
+  // minutes while playing. When a new version is ready, game.js applies it at
+  // the next safe moment (menu or end of race) by reloading.
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').then((reg) => {
+        const check = () => reg.update().catch(() => {});
+        check();
+        setInterval(check, 3 * 60 * 1000);
+        document.addEventListener('visibilitychange', () => {
+          if (!document.hidden) check();
+        });
+        window.addEventListener('focus', check);
+      }).catch(() => {});
+
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        // First install: a controller appears where there was none — no reload needed.
+        if (!window.__iamHadController) { window.__iamHadController = true; return; }
+        window.__iamUpdateReady = true; // game.js reloads when it's safe
+      });
+      window.__iamHadController = !!navigator.serviceWorker.controller;
+    });
+  }
+</script>
+</body>
+</html>

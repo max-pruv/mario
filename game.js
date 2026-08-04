@@ -61,7 +61,7 @@ const MAPS = [
       fog: 0x8a5a78, fogNear: 900, fogFar: 3300,
       hemi: [0xb090e0, 0x3a5a3a, 1.05], sunL: [0xffd9a0, 2.4],
       ground: '#3f7a3f', groundDots: ['#356a35', '#48884a', '#4c8e4c', '#316231'],
-      city: { count: 90, rMin: 1750, rVar: 700, hMin: 120, hVar: 380, color: 0x11111c, glow: 0.9, winDensity: 0.55 },
+      city: { count: 70, rMin: 1750, rVar: 700, hMin: 140, hVar: 340, glow: 1.0, style: 'modern', signs: 0.30 },
       rails: 'neon', trees: 'mixed', landmark: null, sea: null, hills: 40,
     },
   },
@@ -75,10 +75,10 @@ const MAPS = [
       sky: ['#5a9ae0', '#7ab6f0', '#a8d0f5', '#d8ecfb', '#cfe4f4', '#bcd8ec'],
       stars: 0, sun: { x: 700, y: 140, r: 70, color: '255,246,214' }, moon: false,
       mountains: ['#8aa8c8', '#7898bc'],
-      fog: 0xcfe0ee, fogNear: 1100, fogFar: 3600,
-      hemi: [0xcfe0f5, 0x4a6a3a, 1.25], sunL: [0xfff2d0, 2.7],
+      fog: 0xb8cfe4, fogNear: 1000, fogFar: 3400,
+      hemi: [0xc4d8ec, 0x4a6a3a, 1.05], sunL: [0xfff2d0, 2.5],
       ground: '#4a8a44', groundDots: ['#3f7a3d', '#549552', '#589a56', '#3a713a'],
-      city: { count: 70, rMin: 1450, rVar: 500, hMin: 70, hVar: 130, color: 0xcfc0a8, glow: 0.12, winDensity: 0.3 },
+      city: { count: 60, rMin: 1450, rVar: 500, hMin: 70, hVar: 60, glow: 0.15, style: 'paris', signs: 0 },
       rails: 'gold', trees: 'round', landmark: 'eiffel', sea: null, hills: 28,
     },
   },
@@ -92,10 +92,10 @@ const MAPS = [
       sky: ['#2a7ae0', '#3f92ec', '#6ab4f4', '#c8e8fb', '#b8ddf2', '#a4d0ea'],
       stars: 0, sun: { x: 420, y: 120, r: 80, color: '255,250,224' }, moon: false,
       mountains: ['#7aa88a', '#6a987c'],
-      fog: 0xbfe0f0, fogNear: 1100, fogFar: 3600,
-      hemi: [0xd8ecfa, 0x4a7a52, 1.3], sunL: [0xfffbe8, 2.8],
+      fog: 0xaed6ec, fogNear: 1000, fogFar: 3400,
+      hemi: [0xcfe4f4, 0x4a7a52, 1.1], sunL: [0xfffbe8, 2.6],
       ground: '#58a04e', groundDots: ['#4c9044', '#64ac5a', '#68b05e', '#468442'],
-      city: { count: 55, rMin: 1400, rVar: 420, hMin: 60, hVar: 90, color: 0xf0dfc0, glow: 0.1, winDensity: 0.28 },
+      city: { count: 48, rMin: 1400, rVar: 420, hMin: 55, hVar: 70, glow: 0.12, style: 'riviera', signs: 0 },
       rails: 'white', trees: 'palm', landmark: null, hills: 32,
       sea: { x: 1024 + 500, z: 1024 + 2600, color: 0x1f8ad0 },
     },
@@ -114,7 +114,7 @@ const MAPS = [
       fog: 0x1a2138, fogNear: 750, fogFar: 3000,
       hemi: [0x8090c0, 0x1a2a2a, 0.8], sunL: [0xbcd0ff, 1.5],
       ground: '#2c5a30', groundDots: ['#254e2a', '#336637', '#356a39', '#204724'],
-      city: { count: 140, rMin: 1450, rVar: 950, hMin: 220, hVar: 520, color: 0x0c0c16, glow: 1.15, winDensity: 0.62 },
+      city: { count: 110, rMin: 1450, rVar: 950, hMin: 220, hVar: 460, glow: 1.25, style: 'modern', signs: 0.35 },
       rails: 'neon', trees: 'sparse', landmark: null, sea: null, hills: 14,
     },
   },
@@ -132,7 +132,7 @@ const MAPS = [
       fog: 0xc09a88, fogNear: 950, fogFar: 3400,
       hemi: [0xd0a8c0, 0x4a6a42, 1.1], sunL: [0xffc890, 2.5],
       ground: '#4f8a46', groundDots: ['#447c3e', '#5a9a52', '#5e9e56', '#3e7238'],
-      city: { count: 30, rMin: 1500, rVar: 400, hMin: 50, hVar: 80, color: 0xe8d8c0, glow: 0.25, winDensity: 0.3 },
+      city: { count: 26, rMin: 1500, rVar: 400, hMin: 45, hVar: 55, glow: 0.2, style: 'riviera', signs: 0 },
       rails: 'coral', trees: 'palmpine', landmark: 'lighthouse', hills: 55,
       sea: { x: 1024 - 3050, z: 1024 - 300, w: 3600, h: 3600, color: 0x186098 },
     },
@@ -1332,9 +1332,9 @@ function buildTrack(mapIdx) {
       mesh.position.set(c.x + c.nx * off, roadY(c, off) + 18, c.y + c.ny * off);
       mesh.castShadow = true;
       const halo = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: glowWhite, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.5,
+        map: glowWhite, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.26,
       }));
-      halo.scale.set(50, 50, 1);
+      halo.scale.set(38, 38, 1);
       mesh.add(halo);
       group.add(mesh);
       track.itemBoxes.push({ x: mesh.position.x, y: mesh.position.z, respawn: 0, mesh });
@@ -1484,41 +1484,227 @@ function buildTrack(mapIdx) {
     group.add(posts); group.add(tips);
   }
 
-  // city ring
+  // ---- city: composite buildings with real-size windows ----
   if (theme.city && theme.city.count > 0) {
-    let seed = 42;
-    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    let cseed = 42 + mapIdx * 13;
+    const crnd = () => (cseed = (cseed * 16807) % 2147483647) / 2147483647;
     const cc = theme.city;
-    const winTex = canvasTexture(128, (g) => {
-      g.fillStyle = '#0a0a14'; g.fillRect(0, 0, 128, 128);
-      for (let y = 6; y < 122; y += 12)
-        for (let x = 8; x < 120; x += 14) {
-          if (rnd() < cc.winDensity) {
-            g.fillStyle = ['#ffd27a', '#9adcff', '#ff9ad0', '#fff0c0'][(x + y) % 4];
-            g.fillRect(x, y, 7, 7);
+    const CELL = 26;          // one window bay ~= one floor, in world units
+    const TILE = CELL * 4;    // facade texture holds a 4x4 grid of varied cells
+
+    // facade texture per style (4x4 cells so lit/dark windows vary)
+    const facadeTex = canvasTexture(256, (g) => {
+      if (cc.style === 'paris') {
+        g.fillStyle = '#d8cab2'; g.fillRect(0, 0, 256, 256);
+        for (let i = 0; i < 500; i++) {
+          g.fillStyle = i % 2 ? 'rgba(255,255,255,0.05)' : 'rgba(120,100,70,0.07)';
+          g.fillRect(crnd() * 256, crnd() * 256, 3, 3);
+        }
+        for (let cy = 0; cy < 4; cy++) {
+          g.fillStyle = 'rgba(120,100,70,0.5)';
+          g.fillRect(0, cy * 64 + 60, 256, 3); // cornice
+          for (let cx = 0; cx < 4; cx++) {
+            const x = cx * 64 + 18, y = cy * 64 + 8;
+            g.fillStyle = crnd() < 0.25 ? '#f2dfa8' : '#2c2c34'; // few lit
+            g.fillRect(x, y, 28, 42);
+            g.strokeStyle = '#f4ede0'; g.lineWidth = 3;
+            g.strokeRect(x, y, 28, 42);
+            g.strokeStyle = '#5a5a62'; g.lineWidth = 2;
+            g.beginPath(); g.moveTo(x, y + 34); g.lineTo(x + 28, y + 34); g.stroke(); // balcony rail
           }
         }
+      } else if (cc.style === 'riviera') {
+        g.fillStyle = '#f4e6cc'; g.fillRect(0, 0, 256, 256);
+        for (let i = 0; i < 400; i++) {
+          g.fillStyle = 'rgba(200,160,110,0.08)';
+          g.fillRect(crnd() * 256, crnd() * 256, 3, 3);
+        }
+        for (let cy = 0; cy < 4; cy++)
+          for (let cx = 0; cx < 4; cx++) {
+            const x = cx * 64 + 20, y = cy * 64 + 12;
+            g.fillStyle = crnd() < 0.3 ? '#ffe9b0' : '#243040';
+            g.fillRect(x, y, 24, 36);
+            g.fillStyle = '#5f8a6a'; // shutters
+            g.fillRect(x - 9, y, 8, 36);
+            g.fillRect(x + 25, y, 8, 36);
+            g.fillStyle = '#e8d5b5';
+            g.fillRect(x - 10, y - 5, 44, 4); // lintel
+          }
+      } else { // modern glass
+        g.fillStyle = '#1a2030'; g.fillRect(0, 0, 256, 256);
+        for (let cy = 0; cy < 4; cy++) {
+          g.fillStyle = '#10141f';
+          g.fillRect(0, cy * 64 + 56, 256, 8); // floor slab
+          for (let cx = 0; cx < 4; cx++) {
+            const x = cx * 64 + 6, y = cy * 64 + 6;
+            const r = crnd();
+            if (r < 0.34) g.fillStyle = '#ffd27a';
+            else if (r < 0.5) g.fillStyle = '#9adcff';
+            else if (r < 0.58) g.fillStyle = '#fff0c0';
+            else {
+              const gl = g.createLinearGradient(x, y, x + 52, y + 46);
+              gl.addColorStop(0, '#2a3a55');
+              gl.addColorStop(1, '#141c2c');
+              g.fillStyle = gl;
+            }
+            g.fillRect(x, y, 52, 46);
+            g.strokeStyle = '#0c0f18'; g.lineWidth = 3;
+            g.strokeRect(x, y, 52, 46);
+          }
+        }
+      }
     }, true);
-    disposables.push(winTex);
-    const city = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(1, 1, 1),
-      new THREE.MeshStandardMaterial({
-        color: cc.color, roughness: 0.8, metalness: 0.2,
-        emissive: 0xffffff, emissiveMap: winTex, emissiveIntensity: cc.glow, map: winTex,
-      }),
-      cc.count
-    );
-    const m4 = new THREE.Matrix4();
+    disposables.push(facadeTex);
+
+    const facadeGeos = [], roofGeos = [], tileGeos = [], detailGeos = [], signGeos = [];
+    const colOf = (hex) => new THREE.Color(hex);
+    const wallTints = cc.style === 'paris'
+      ? [colOf(0xfff6e8), colOf(0xf2e6d2), colOf(0xe8dcc4)]
+      : cc.style === 'riviera'
+        ? [colOf(0xfff2dc), colOf(0xf6d8c0), colOf(0xf2e6b8), colOf(0xdce8f0), colOf(0xf6c9c0)]
+        : [colOf(0xffffff), colOf(0xcdd8e8), colOf(0xb8c4d8), colOf(0xe8e2d4)];
+
+    const pushTint = (geo, tint) => {
+      const n = geo.attributes.position.count;
+      const colArr = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) { colArr[i * 3] = tint.r; colArr[i * 3 + 1] = tint.g; colArr[i * 3 + 2] = tint.b; }
+      geo.setAttribute('color', new THREE.BufferAttribute(colArr, 3));
+      facadeGeos.push(geo);
+    };
+    // box with window UVs matched to real dimensions (windows never stretch)
+    const winBox = (w, h, d, x, y, z, ry = 0) => {
+      const g = new THREE.BoxGeometry(w, h, d);
+      const uv = g.attributes.uv;
+      const scale = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
+      for (let f = 0; f < 6; f++) {
+        const [su, sv] = scale[f];
+        for (let v = 0; v < 4; v++) {
+          const i = f * 4 + v;
+          uv.setXY(i, uv.getX(i) * su / TILE, uv.getY(i) * sv / TILE);
+        }
+      }
+      if (ry) g.rotateY(ry);
+      g.translate(x, y, z);
+      return g;
+    };
+    const winCyl = (r, h, x, y, z) => {
+      const g = new THREE.CylinderGeometry(r, r, h, 14, 1, true);
+      const uv = g.attributes.uv;
+      const su = (TAU * r) / TILE, sv = h / TILE;
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv);
+      g.translate(x, y, z);
+      return g;
+    };
+    const slab = (w, h, d, x, y, z, ry = 0) => {
+      const g = new THREE.BoxGeometry(w, h, d);
+      if (ry) g.rotateY(ry);
+      g.translate(x, y, z);
+      return g;
+    };
+    const hipRoof = (w, h, d, x, y, z, ry = 0) => {
+      const g = new THREE.ConeGeometry(1, 1, 4);
+      g.rotateY(Math.PI / 4);
+      g.scale(w * 0.74, h, d * 0.74);
+      if (ry) g.rotateY(ry);
+      g.translate(x, y, z);
+      return g;
+    };
+
     for (let i = 0; i < cc.count; i++) {
-      const a = (i / cc.count) * TAU + rnd() * 0.08;
-      const r = cc.rMin + rnd() * cc.rVar;
-      const w = 70 + rnd() * 110;
-      const h = cc.hMin + rnd() * cc.hVar;
-      m4.makeScale(w, h, w);
-      m4.setPosition(WORLDC + Math.cos(a) * r, h / 2 - 4, WORLDC + Math.sin(a) * r);
-      city.setMatrixAt(i, m4);
+      const a = (i / cc.count) * TAU + crnd() * 0.1;
+      const r = cc.rMin + crnd() * cc.rVar;
+      const bx = WORLDC + Math.cos(a) * r;
+      const bz = WORLDC + Math.sin(a) * r;
+      const ry = crnd() * TAU;
+      const tint = wallTints[i % wallTints.length];
+      const h = cc.hMin + crnd() * cc.hVar;
+
+      if (cc.style === 'paris') {
+        const w = 120 + crnd() * 90, d = 70 + crnd() * 30;
+        pushTint(winBox(w, h, d, bx, h / 2, bz, ry), tint);
+        roofGeos.push(hipRoof(w + 8, 34, d + 8, bx, h + 17, bz, ry)); // mansard
+        for (let ch = 0; ch < 3; ch++)
+          detailGeos.push(slab(6, 16, 6, bx + (crnd() - 0.5) * w * 0.6, h + 30, bz + (crnd() - 0.5) * d * 0.5, ry));
+      } else if (cc.style === 'riviera') {
+        const w = 70 + crnd() * 70, d = 55 + crnd() * 35;
+        pushTint(winBox(w, h, d, bx, h / 2, bz, ry), tint);
+        tileGeos.push(hipRoof(w + 10, 26, d + 10, bx, h + 13, bz, ry)); // terracotta
+        if (crnd() < 0.5) detailGeos.push(slab(6, 12, 6, bx + w * 0.2, h + 22, bz, ry));
+      } else {
+        // modern: stepped tower / slab / cylinder
+        const kind = crnd();
+        if (kind < 0.2) {
+          const cr = 34 + crnd() * 22;
+          pushTint(winCyl(cr, h, bx, h / 2, bz), tint);
+          detailGeos.push(slab(cr * 2 + 4, 3, cr * 2 + 4, bx, h + 1.5, bz));
+        } else if (kind < 0.6) {
+          const w = 70 + crnd() * 60, d = 60 + crnd() * 50;
+          const h1 = h * (0.55 + crnd() * 0.15), h2 = h - h1;
+          pushTint(winBox(w, h1, d, bx, h1 / 2, bz, ry), tint);
+          pushTint(winBox(w * 0.68, h2, d * 0.68, bx, h1 + h2 / 2, bz, ry), tint);
+          detailGeos.push(slab(w + 4, 3, d + 4, bx, h1 + 1.5, bz, ry));       // setback parapet
+          detailGeos.push(slab(w * 0.68 + 4, 3, d * 0.68 + 4, bx, h + 1.5, bz, ry));
+          if (crnd() < 0.6) detailGeos.push(slab(2.4, 40 + crnd() * 40, 2.4, bx, h + 22, bz)); // antenna
+        } else {
+          const w = 110 + crnd() * 80, d = 55 + crnd() * 30;
+          pushTint(winBox(w, h, d, bx, h / 2, bz, ry), tint);
+          detailGeos.push(slab(w + 4, 3, d + 4, bx, h + 1.5, bz, ry));
+          if (crnd() < 0.5) { // water tank
+            detailGeos.push(slab(12, 14, 12, bx + w * 0.2, h + 8, bz, ry));
+          }
+          for (let ac = 0; ac < 3; ac++) // AC units
+            detailGeos.push(slab(8, 5, 8, bx + (crnd() - 0.5) * w * 0.6, h + 4, bz + (crnd() - 0.5) * d * 0.5, ry));
+        }
+        // glowing rooftop sign
+        if (crnd() < (cc.signs || 0)) {
+          const sw = 60 + crnd() * 30;
+          const sg = new THREE.PlaneGeometry(sw, sw * 0.3);
+          const pick = Math.floor(crnd() * 4);
+          const uv = sg.attributes.uv;
+          for (let vi = 0; vi < uv.count; vi++)
+            uv.setXY(vi, (uv.getX(vi) + (pick % 2)) * 0.5, (uv.getY(vi) + (pick >> 1)) * 0.5);
+          sg.rotateY(ry + Math.PI * (crnd() < 0.5 ? 0 : 1));
+          sg.translate(bx, h + 26, bz);
+          signGeos.push(sg);
+          detailGeos.push(slab(2, 24, 2, bx, h + 10, bz));
+        }
+      }
     }
-    group.add(city);
+
+    const facadeMat = new THREE.MeshStandardMaterial({
+      map: facadeTex, roughness: 0.75, metalness: cc.style === 'modern' ? 0.35 : 0.05,
+      vertexColors: true,
+      emissive: 0xffffff, emissiveMap: facadeTex, emissiveIntensity: cc.glow * 0.35,
+    });
+    const cityF = new THREE.Mesh(mergeGeometries(facadeGeos), facadeMat);
+    group.add(cityF);
+    if (roofGeos.length)
+      group.add(new THREE.Mesh(mergeGeometries(roofGeos), new THREE.MeshStandardMaterial({ color: 0x3a3f4c, roughness: 0.8 })));
+    if (tileGeos.length)
+      group.add(new THREE.Mesh(mergeGeometries(tileGeos), new THREE.MeshStandardMaterial({ color: 0xb85a38, roughness: 0.85 })));
+    if (detailGeos.length)
+      group.add(new THREE.Mesh(mergeGeometries(detailGeos), new THREE.MeshStandardMaterial({ color: 0x22242e, roughness: 0.7, metalness: 0.3 })));
+    if (signGeos.length) {
+      const signTex = canvasTexture(256, (g) => {
+        g.fillStyle = '#0a0a14'; g.fillRect(0, 0, 256, 256);
+        const draw = (txt, x, y, col) => {
+          g.font = "900 40px 'Arial Rounded MT Bold', system-ui, sans-serif";
+          g.textAlign = 'center'; g.textBaseline = 'middle';
+          g.fillStyle = col;
+          g.fillText(txt, x, y);
+          g.strokeStyle = col; g.lineWidth = 3;
+          g.strokeRect(x - 58, y - 28, 116, 56);
+        };
+        draw('IAM', 64, 192, '#40e0ff');
+        draw('KART', 192, 192, '#ff50dc');
+        draw('GP ★', 64, 64, '#ffd24a');
+        draw('TURBO', 192, 64, '#96ff50');
+      });
+      disposables.push(signTex);
+      group.add(new THREE.Mesh(mergeGeometries(signGeos), new THREE.MeshBasicMaterial({
+        map: signTex, color: new THREE.Color(1.8, 1.8, 1.8), side: THREE.DoubleSide, transparent: true,
+      })));
+    }
   }
 
   // grandstand + floodlights

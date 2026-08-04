@@ -6,7 +6,7 @@
 // clients pick up new releases automatically within minutes.
 // Bump CACHE_VERSION on every release to force an immediate coordinated update.
 
-const CACHE_VERSION = 'iam-kart-v10';
+const CACHE_VERSION = 'iam-kart-v11';
 
 // Pages served by these very old caches predate the in-page auto-reload
 // logic — the only way to unstick them is a forced navigation on activate.

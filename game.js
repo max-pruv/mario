@@ -2696,19 +2696,23 @@ function drawFinish() {
 }
 
 /* ---------------- Resize ---------------- */
+let lastCW = 0, lastCH = 0;
 function resize() {
-  const r = glCanvas.getBoundingClientRect();
-  if (r.width === 0) return;
-  renderer.setSize(r.width, r.height, false);
-  composer.setSize(r.width, r.height);
+  const w = glCanvas.clientWidth, h = glCanvas.clientHeight;
+  if (!w || !h) return;
+  lastCW = w; lastCH = h;
+  renderer.setSize(w, h, false);
+  composer.setSize(w, h);
   composer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.75));
-  camera.aspect = r.width / r.height;
+  camera.aspect = w / h;
   camera.updateProjectionMatrix();
   const dpr = Math.min(devicePixelRatio || 1, 2);
-  hud.width = Math.round(r.width * dpr);
-  hud.height = Math.round(r.height * dpr);
+  hud.width = Math.round(w * dpr);
+  hud.height = Math.round(h * dpr);
 }
 addEventListener('resize', resize);
+addEventListener('orientationchange', () => { resize(); setTimeout(resize, 300); setTimeout(resize, 900); });
+if (window.visualViewport) visualViewport.addEventListener('resize', resize);
 resize();
 
 /* ---------------- Main loop ---------------- */
@@ -2717,6 +2721,7 @@ let perfNow = 0, lastT = 0;
 function frame(t) {
   requestAnimationFrame(frame);
   perfNow = t;
+  if (glCanvas.clientWidth !== lastCW || glCanvas.clientHeight !== lastCH) resize();
   const dt = clamp((t - lastT) / 1000, 0, 0.033);
   lastT = t;
   const tSec = t * 0.001;

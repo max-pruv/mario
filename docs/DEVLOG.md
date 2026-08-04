@@ -2,6 +2,11 @@
 
 Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker (`sw.js`) : chaque bump déclenche la mise à jour automatique de tous les clients installés.
 
+## v12 — Correctif : rendu étiré en paysage (iOS)
+
+- À la rotation, Safari iOS déclenche `resize` avant d'avoir fini son layout : le buffer de rendu restait au format portrait, étiré sur l'écran paysage (proportions fausses).
+- Correctif : garde par frame — dès que les dimensions réelles du canvas changent, le renderer, le composer, la caméra et le HUD sont resynchronisés ; écouteurs `orientationchange` (avec rappels différés) et `visualViewport` ajoutés.
+
 ## v11 — Vraies villes : immeubles composites par style
 
 - Fini les blocs étirés : **générateur d'immeubles composites** fusionnés en quelques draw calls — tours à redans avec parapets, tours cylindriques, antennes, châteaux d'eau, clim en toiture ; **immeubles haussmanniens** à toits mansardés et cheminées (Paris) ; **villas pastel à toits de tuiles** (Nice, Biarritz).

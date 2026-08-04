@@ -42,6 +42,13 @@
     <button id="btnGyro" aria-label="Activer le gyroscope">🧭 GYRO&nbsp;: OFF</button>
   </div>
 
+  <!-- Install banner (shown only outside the installed app) -->
+  <div id="install-banner" hidden>
+    <span id="install-text"></span>
+    <button id="install-do" hidden>Installer</button>
+    <button id="install-close" aria-label="Fermer">✕</button>
+  </div>
+
 </div>
 
 <script type="module" src="./game.js"></script>
@@ -71,6 +78,56 @@
       window.__iamHadController = !!navigator.serviceWorker.controller;
     });
   }
+
+  // ---- Install banner ----
+  // iOS: Apple forbids programmatic install, so we guide the 2 taps.
+  // Android/Chrome: real one-click install via beforeinstallprompt.
+  (function () {
+    const banner = document.getElementById('install-banner');
+    const textEl = document.getElementById('install-text');
+    const doBtn = document.getElementById('install-do');
+    const closeBtn = document.getElementById('install-close');
+    const KEY = 'iam-install-dismissed';
+    const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+    if (standalone) return;
+    try {
+      const d = +localStorage.getItem(KEY) || 0;
+      if (Date.now() - d < 7 * 86400 * 1000) return; // dismissed recently
+    } catch (e) {}
+
+    const shareSvg = '<svg width="15" height="18" viewBox="0 0 15 18" style="vertical-align:-3px" fill="none" stroke="#4aa3ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 1v10.5M4 4.5 7.5 1 11 4.5"/><path d="M3 8H2v9h11V8h-1"/></svg>';
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+    let deferred = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferred = e;
+      textEl.textContent = '📲 Joue en plein écran, même hors ligne !';
+      doBtn.hidden = false;
+      banner.hidden = false;
+    });
+    doBtn.addEventListener('click', async () => {
+      if (!deferred) return;
+      deferred.prompt();
+      await deferred.userChoice.catch(() => {});
+      deferred = null;
+      banner.hidden = true;
+    });
+
+    if (isIOS) {
+      setTimeout(() => {
+        textEl.innerHTML = '📲 Installe <b>IAM Kart</b>&nbsp;: appuie sur ' + shareSvg +
+          ' puis «&nbsp;Sur l’écran d’accueil&nbsp;»';
+        banner.hidden = false;
+      }, 2500);
+    }
+
+    closeBtn.addEventListener('click', () => {
+      banner.hidden = true;
+      try { localStorage.setItem(KEY, String(Date.now())); } catch (e) {}
+    });
+  })();
 </script>
 </body>
 </html>

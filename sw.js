@@ -6,7 +6,7 @@
 // clients pick up new releases automatically within minutes.
 // Bump CACHE_VERSION on every release to force an immediate coordinated update.
 
-const CACHE_VERSION = 'iam-kart-v9';
+const CACHE_VERSION = 'iam-kart-v10';
 
 // Pages served by these very old caches predate the in-page auto-reload
 // logic — the only way to unstick them is a forced navigation on activate.
@@ -29,6 +29,7 @@ const ASSETS = [
   './vendor/addons/shaders/CopyShader.js',
   './vendor/addons/shaders/LuminosityHighPassShader.js',
   './vendor/addons/shaders/OutputShader.js',
+  './vendor/addons/utils/BufferGeometryUtils.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',

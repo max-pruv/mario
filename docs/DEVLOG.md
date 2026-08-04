@@ -2,6 +2,15 @@
 
 Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker (`sw.js`) : chaque bump déclenche la mise à jour automatique de tous les clients installés.
 
+## v10 — Refonte graphique majeure : relief, vrais karts, vrais pilotes
+
+- **Terrain 3D** : collines procédurales, circuits avec montées/descentes (amplitude par circuit) et **virages relevés** (banking) façon MK8 — route, bordures, rails, pads et ligne de départ épousent le relief ; le sol est un maillage déplacé aplani sous la piste.
+- **Karts remodelés de zéro** : carrosserie galbée (sphères fusionnées — plus un seul cube visible), garde-boue sur les 4 roues, capot moteur, jupes latérales, ailerons capsules, baquet, colonne + volant, chromes, pneus larges toriques avec jantes dorées à 5 bâtons. Géométries fusionnées (BufferGeometryUtils) pour rester fluide sur mobile.
+- **Pilotes vivants** : visage cartoon peint (yeux, sourcils, sourire, joues), casquette à visière colorée, bras tendus vers le volant, mains gantées ; suspension animée, tangage dans les pentes, inclinaison dans les virages relevés.
+- **Matériaux** : normal maps procédurales sur l'asphalte et l'herbe (micro-relief réactif à la lumière).
+- **Décor** : arbres à triple canopée organique avec variations de teinte, rochers épars, ciel repeint en 2K avec cumulus ombrés.
+- **Finitions** : vignettage cinématique, typographie ronde de jeu vidéo.
+
 ## v9 — Lancement de course en 3 étapes façon MK
 
 - Écran titre, puis **① cylindrée** (50/100/150cc) → **② pilote** (gros plan 3D sur le kart qui tourne + grille des 8 personnages) → **③ circuit** avec preview : survol 3D du circuit en direct (caméra qui suit la piste comme l'intro des courses MK), grande minimap, carrousel des 5 vignettes, record local de la cylindrée choisie.

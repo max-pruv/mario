@@ -2,7 +2,13 @@
 
 Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker (`sw.js`) : chaque bump déclenche la mise à jour automatique de tous les clients installés.
 
-## v23 — Chat vocal entre les deux joueurs
+## v23 — Chat vocal, choix du pilote, menus pleine hauteur
+
+- **Nouvelle étape 4/5 « Choisis ton pilote »** (solo **et** duo) : chacun choisit qui conduit — Inès, Alice, Marlon (avec leurs vrais visages) ou un rival. En duo, chacun voit le pilote de l'autre ; si les deux prennent le même, l'invité est décalé automatiquement sur le siège libre au départ.
+- **Joueur 2 visible sur la minimap** : gros point doré cerclé marqué « 2 », et sous la carte un indicateur **« ▲ J2 devant / ▼ J2 derrière »** en direct.
+- **Menus pleine hauteur en portrait** : les 10 écrans (titre, cylindrée, véhicule, couleur, pilote, circuit + 4 écrans duo) étirent leur contenu sur tout l'écran au lieu de se tasser au centre.
+
+### Chat vocal entre les deux joueurs
 
 - **Bouton 🎙 en haut à droite dès que les deux téléphones sont connectés** : un tap → le micro s'active (autorisation demandée la première fois) et la voix part **directement** vers l'autre téléphone par le même tunnel pair-à-pair WebRTC que le jeu — aucun serveur, aucune inscription.
 - Chacun contrôle son propre micro (🎙 OFF par défaut, bouton rouge quand il émet) ; l'autre entend dans le haut-parleur. Écho et bruit filtrés (echoCancellation + noiseSuppression).

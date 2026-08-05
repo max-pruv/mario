@@ -1219,9 +1219,10 @@ let kartMeshes = CHARACTERS.map((_, i) => buildKartMesh(i, i === 0 ? vehSel : DE
 // rebuild any kart whose vehicle should change (player picks vehSel, AI keep theirs)
 function ensureKartMeshes() {
   for (let i = 0; i < CHARACTERS.length; i++) {
-    const want = (net.active && i === net.remoteChar) ? net.remoteVeh
+    const remoteOv = net.active && i === net.remoteChar && i !== menuChar;
+    const want = remoteOv ? net.remoteVeh
       : i === menuChar ? vehSel : DEFAULT_VEH[i];
-    const wantCol = (net.active && i === net.remoteChar) ? net.remoteColor
+    const wantCol = remoteOv ? net.remoteColor
       : i === menuChar ? COLOR_PALETTE[colorSel] : null;
     if (kartMeshes[i].veh !== want || kartMeshes[i].colorOv !== wantCol) {
       scene.remove(kartMeshes[i].group);
@@ -3058,16 +3059,22 @@ function netOnData(m) {
         if (+s.ft) k.finishTime = +s.ft;
       }
     }
-  } else if (m.t === 'ready') {             // the other player picked veh + color
+  } else if (m.t === 'ready') {             // the other player picked veh + color + pilot
     net.remoteVeh = clamp(m.veh | 0, 0, VEHICLES.length - 1);
     net.remoteColor = typeof m.color === 'string' ? m.color : null;
+    if (m.char !== undefined) net.remoteChar = clamp(m.char | 0, 0, CHARACTERS.length - 1);
     net.remoteReady = true;
     ensureKartMeshes();
-  } else if (m.t === 'go') {                // host launches the race
+  } else if (m.t === 'go') {                // host launches with final pilot assignments
     if (!net.isHost) {
       mapSel = clamp(m.map | 0, 0, MAPS.length - 1);
       ccSel = clamp(m.cc | 0, 0, CC_CLASSES.length - 1);
       ccMul = CC_CLASSES[ccSel].mul;
+      if (m.hc !== undefined) {
+        net.remoteChar = clamp(m.hc | 0, 0, CHARACTERS.length - 1);
+        net.myChar = clamp(m.gc | 0, 0, CHARACTERS.length - 1);
+        menuChar = net.myChar;
+      }
       duoStartRace();
     }
   } else if (m.t === 'item') {
@@ -3648,7 +3655,7 @@ function updateCamera(dt) {
     camera.lookAt(c.x, c.h + 18, c.y);
     sun.position.set(c.x + 300, 500, c.y + 120);
     sun.target.position.set(c.x, 0, c.y);
-  } else if (state === 'char' || state === 'color') {
+  } else if (state === 'char' || state === 'color' || state === 'pilot') {
     // MK-style close-up: slow orbit around the selected kart
     const t = perfNow * 0.0006;
     const py = player.visY || 0;
@@ -3814,9 +3821,24 @@ function drawHUD() {
   const mmY = HB > HW ? 100 : HB - 94; // portrait: clear of the A button
   hctx.drawImage(track.miniCanvas, HW - 94, mmY);
   for (const k of karts) {
-    hctx.fillStyle = k.isPlayer ? '#fff' : CHARACTERS[k.charIdx].color;
     const mx = HW - 94 + k.x / 2048 * 84, my = mmY + k.y / 2048 * 84;
-    hctx.beginPath(); hctx.arc(mx, my, k.isPlayer ? 3 : 2.2, 0, TAU); hctx.fill();
+    if (k.isRemotePlayer) {
+      // Joueur 2 : gros point doré cerclé + « 2 »
+      hctx.fillStyle = '#ffd24a';
+      hctx.strokeStyle = '#fff'; hctx.lineWidth = 1.4;
+      hctx.beginPath(); hctx.arc(mx, my, 4.2, 0, TAU); hctx.fill(); hctx.stroke();
+      text('2', mx, my - 5.5, 8, 'center', '#16161e');
+    } else {
+      hctx.fillStyle = k.isPlayer ? '#fff' : CHARACTERS[k.charIdx].color;
+      hctx.beginPath(); hctx.arc(mx, my, k.isPlayer ? 3 : 2.2, 0, TAU); hctx.fill();
+    }
+  }
+  if (net.active) {
+    const rk = netRemoteKart();
+    if (rk) {
+      const ahead = rk.key > player.key;
+      text(ahead ? '▲ J2 devant' : '▼ J2 derrière', HW - 52, mmY + 90, 9, 'center', ahead ? '#ffb04a' : '#6ede3a');
+    }
   }
   hctx.globalAlpha = 1;
 }
@@ -3861,7 +3883,7 @@ function MY(y) {
 }
 
 function stepHeader(step, label) {
-  text(`ÉTAPE ${step}/4`, HW / 2, MY(14), 11, 'center', '#ff50dc');
+  text(`ÉTAPE ${step}/5`, HW / 2, MY(14), 11, 'center', '#ff50dc');
   text(label, HW / 2, MY(28), 22, 'center', '#40e0ff');
   text('‹ retour', 14, MY(46), 13, 'left', '#cde');
   hitR(0, MY(36), 96, 36, { t: 'back' });
@@ -4017,11 +4039,28 @@ function drawColorSelect() {
   drawGoButton('CONTINUER ▶');
 }
 
+function drawPilotSelect() {
+  stepHeader(4, 'CHOISIS TON PILOTE');
+  const ch = CHARACTERS[menuChar];
+  text(ch.name.toUpperCase(), HW / 2, MY(62), 28, 'center', '#ffd24a');
+  if (menuChar <= 2) text('⭐ un vrai pilote IAM !', HW / 2, MY(96), 12, 'center', '#ff50dc');
+  else text('un rival', HW / 2, MY(96), 12, 'center', '#9ab');
+  text('◀', HW / 2 - 130, MY(130), 34, 'center', '#fff');
+  text('▶', HW / 2 + 130, MY(130), 34, 'center', '#fff');
+  hitR(HW / 2 - 180, MY(90), 100, 110, { t: 'nav', d: -1 });
+  hitR(HW / 2 + 80, MY(90), 100, 110, { t: 'nav', d: 1 });
+  text(`${menuChar + 1} / ${CHARACTERS.length}`, HW / 2, MY(160), 11, 'center', '#9ab');
+  if (net.active && net.remoteReady)
+    text(`Joueur 2 : ${CHARACTERS[net.remoteChar].name}`, HW / 2, MY(200), 12, 'center', '#9fe');
+  text('← glisse pour changer →', HW / 2, MY(232), 11, 'center', '#8ac');
+  drawGoButton('CONTINUER ▶');
+}
+
 function drawMapSelect() {
   // the 3D flythrough behind is the live preview — keep the veil light
   hctx.fillStyle = 'rgba(8,5,25,0.25)';
   hctx.fillRect(0, 0, HW, HB);
-  stepHeader(4, 'CHOISIS TON CIRCUIT');
+  stepHeader(5, 'CHOISIS TON CIRCUIT');
   const map = MAPS[mapSel];
   text('◀', HW / 2 - 150, MY(110), 30, 'center', '#fff');
   text('▶', HW / 2 + 150, MY(110), 30, 'center', '#fff');
@@ -4160,15 +4199,17 @@ function frame(t) {
       } else if (state === 'char') {
         if (net.active && !net.isHost) { netQuit(); state = 'mp'; } else state = 'cc';
       } else if (state === 'color') state = 'char';
-      else if (state === 'map') state = 'color';
+      else if (state === 'pilot') state = 'color';
+      else if (state === 'map') state = 'pilot';
       else if (state === 'mp') { netQuit(); state = 'title'; }
       else if (state === 'mp-host' || state === 'mp-join') { netQuit(); state = 'mp'; }
-      else if (state === 'mp-wait') state = 'color';
+      else if (state === 'mp-wait') state = 'pilot';
       beep(360, 0.08, 'square');
     } else if (a.t === 'nav') {
       const dir = a.d;
       if (state === 'char') { uiQueue.push({ t: 'veh', d: dir }); continue; }
       if (state === 'color') { uiQueue.push({ t: 'col', d: dir }); continue; }
+      if (state === 'pilot') { uiQueue.push({ t: 'pilot', d: dir }); continue; }
       else if (state === 'cc') ccSel = (ccSel + CC_CLASSES.length + dir) % CC_CLASSES.length;
       else if (state === 'map') {
         mapSel = (mapSel + MAPS.length + dir) % MAPS.length;
@@ -4186,6 +4227,11 @@ function frame(t) {
       if (net.joinCode.length === 4) { net.error = ''; netConnectTo(net.joinCode); }
     } else if (a.t === 'digit-del') { net.joinCode = net.joinCode.slice(0, -1); net.error = ''; beep(360, 0.05, 'square');
     } else if (a.t === 'rematch') { duoRematch();
+    } else if (a.t === 'pilot') {
+      menuChar = (menuChar + CHARACTERS.length + a.d) % CHARACTERS.length;
+      if (net.active) net.myChar = menuChar;
+      resetRace(menuChar);
+      beep(480, 0.06, 'square');
     } else if (a.t === 'col') {
       colorSel = a.i !== undefined ? a.i : (colorSel + COLOR_PALETTE.length + a.d) % COLOR_PALETTE.length;
       try { localStorage.setItem('iam-color', String(colorSel)); } catch (e) {}
@@ -4249,9 +4295,16 @@ function frame(t) {
     if (rightPressed) uiQueue.push({ t: 'col', d: 1 });
     if (karts.length === 0) resetRace(menuChar);
     if (itemPressed) { state = 'char'; beep(360, 0.08, 'square'); }
+    else if (startPressed) { state = 'pilot'; beep(560, 0.08, 'square'); }
+  } else if (state === 'pilot') {
+    // étape 4/5 : quel pilote conduit (Inès, Alice, Marlon ou un rival)
+    if (leftPressed) uiQueue.push({ t: 'pilot', d: -1 });
+    if (rightPressed) uiQueue.push({ t: 'pilot', d: 1 });
+    if (karts.length === 0) resetRace(menuChar);
+    if (itemPressed) { state = 'color'; beep(360, 0.08, 'square'); }
     else if (startPressed) {
       if (net.active) {
-        netSend({ t: 'ready', veh: vehSel, color: COLOR_PALETTE[colorSel] });
+        netSend({ t: 'ready', veh: vehSel, color: COLOR_PALETTE[colorSel], char: menuChar });
         state = net.isHost ? 'map' : 'mp-wait';
       } else state = 'map';
       beep(560, 0.08, 'square');
@@ -4270,7 +4323,12 @@ function frame(t) {
     else if (startPressed) {
       if (net.active) {
         if (net.remoteReady && net.conn && net.conn.open) {
-          netSend({ t: 'go', map: mapSel, cc: ccSel });
+          // same pilot picked twice? the guest gets the next free seat
+          net.myChar = menuChar;
+          let gc = net.remoteChar;
+          if (gc === net.myChar) gc = (gc + 1) % CHARACTERS.length;
+          net.remoteChar = gc;
+          netSend({ t: 'go', map: mapSel, cc: ccSel, hc: net.myChar, gc });
           duoStartRace();
         }
       } else {
@@ -4340,6 +4398,7 @@ function frame(t) {
   else if (state === 'cc') drawCcSelect();
   else if (state === 'char') drawCharSelect();
   else if (state === 'color') drawColorSelect();
+  else if (state === 'pilot') drawPilotSelect();
   else if (state === 'map') drawMapSelect();
   else if (state === 'mp') drawMpMenu();
   else if (state === 'mp-host') drawMpHost();

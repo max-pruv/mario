@@ -4612,16 +4612,19 @@ function drawMpJoin() {
     hctx.beginPath(); hctx.roundRect(x, y, 50, 52, 10); hctx.stroke();
     if (net.joinCode[i]) text(net.joinCode[i], x + 25, y + 10, 30, 'center', '#fff');
   }
+  // the keypad is a COMPACT block: only its anchor stretches with the screen,
+  // never the spacing between its own keys (that's what kept breaking)
   const rows = [[1, 2, 3], [4, 5, 6], [7, 8, 9], ['⌫', 0, null]];
+  const padTop = Math.min(MY(96), HB - 100 - 4 * 62);
   rows.forEach((row, r) => {
     row.forEach((d, ci) => {
       if (d === null) return;
-      const x = HW / 2 - 128 + ci * 88, y = MY(100 + r * 52);
+      const x = HW / 2 - 128 + ci * 88, y = padTop + r * 62;
       hctx.fillStyle = 'rgba(30,60,140,0.75)';
       hctx.strokeStyle = 'rgba(120,190,255,0.5)'; hctx.lineWidth = 1.5;
-      hctx.beginPath(); hctx.roundRect(x, y, 80, 44, 12); hctx.fill(); hctx.stroke();
-      text(String(d), x + 40, y + 10, 23, 'center', '#fff');
-      hitR(x - 4, y - 4, 88, 52, d === '⌫' ? { t: 'digit-del' } : { t: 'digit', d });
+      hctx.beginPath(); hctx.roundRect(x, y, 80, 48, 12); hctx.fill(); hctx.stroke();
+      text(String(d), x + 40, y + 12, 23, 'center', '#fff');
+      hitR(x - 4, y - 4, 88, 56, d === '⌫' ? { t: 'digit-del' } : { t: 'digit', d });
     });
   });
   if (net.status) text(net.status + '.'.repeat(1 + ((perfNow / 400) | 0) % 3), HW / 2, HB - 40, 13, 'center', '#9fe');

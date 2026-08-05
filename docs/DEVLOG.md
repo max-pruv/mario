@@ -16,6 +16,13 @@ Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker
 - Le micro se coupe proprement à la fin de la partie ou si la connexion tombe.
 - Testé de bout en bout : deux navigateurs à micros simulés, flux vocal reçu dans les deux sens, on/off propre — 7/7.
 
+## v34 — Animations MK8 : sauts, planeur, étincelles, lumières
+
+- **Rampes de saut** (2 tranches orange incandescentes par circuit) : décollage, **planeur delta à la couleur du kart**, cabrage/piqué selon la vitesse verticale, descente planée, **squash d'atterrissage** avec rebond d'amorti. L'IA saute aussi ; la hauteur de vol voyage en réseau.
+- **Hop de drift** au déclenchement du dérapage + **étincelles par paliers** (bleues en charge, orange quand le mini-turbo est prêt).
+- **Lumières** : halo néon coloré sous chaque kart (intense la nuit), feux de freinage rouges, **faisceaux de phares volumétriques** pour les joueurs sur les circuits nocturnes, squash/stretch en boost.
+- Direction réduite en l'air (60 %) pour des sauts qui se pilotent comme dans MK8.
+
 ## v32-v33 — UI ancrée, prénoms en multi, bouton bonus accessible, 2 nouveaux circuits
 
 - **Widgets ancrés** : plaques, compteurs, sous-titres, flèches et minimap partagent un seul ancrage par écran — plus de « BRIQUE » hors de sa plaque ni de flèches décalées de leurs zones tactiles (le tap raté n'avance plus l'étape : « taper n'importe où » ne vaut plus que sur titre et arrivée).

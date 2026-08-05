@@ -37,7 +37,7 @@ html, body {
 #controls { display: none; }
 
 @media (pointer: coarse) {
-  #controls { display: block; }
+  #controls.ingame { display: block; }
 }
 
 .pad {

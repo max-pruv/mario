@@ -2,6 +2,12 @@
 
 Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker (`sw.js`) : chaque bump déclenche la mise à jour automatique de tous les clients installés.
 
+## v18 — Fix superpositions de l'écran titre
+
+- Les contrôles tactiles (joystick, boutons A/B) ne s'affichent plus que **pendant la course** — les menus sont propres.
+- La ligne d'aide clavier ne chevauche plus le bouton JOUER : réservée au desktop et repositionnée au-dessus.
+- Le bouton gyroscope reste accessible dans les menus (sorti du bloc contrôles).
+
 ## v17 — Loading de mise à jour, portrait, véhicule unique, swipe, fix luminosité iOS
 
 - **Écran de chargement de mise à jour** : au lancement, si une nouvelle version est disponible, un écran « 🔄 Mise à jour du jeu… » bloque jusqu'à son installation puis recharge — on joue toujours sur la dernière version (garde-fou 20 s, jamais en pleine course).

@@ -3045,7 +3045,8 @@ function drawTitle() {
   text('IAM KART', HW / 2, OY + 50, 58, 'center', '#40e0ff');
   text('Inès · Alice · Marlon', HW / 2, OY + 112, 16, 'center', '#ff50dc');
   drawGoButton('JOUER ▶');
-  text('← → choisir · Entrée valider · B retour · A gaz · B objet en course', HW / 2, OY + 292, 9, 'center', '#9ab');
+  if (!matchMedia('(pointer: coarse)').matches)
+    text('← → choisir · Entrée valider · B retour · R recommencer', HW / 2, OY + 238, 10, 'center', '#9ab');
 }
 
 function drawCcSelect() {
@@ -3185,11 +3186,19 @@ resize();
 
 /* ---------------- Main loop ---------------- */
 let perfNow = 0, lastT = 0;
+const controlsEl = document.getElementById('controls');
+let controlsShown = null;
 
 function frame(t) {
   requestAnimationFrame(frame);
   perfNow = t;
   if (glCanvas.clientWidth !== lastCW || glCanvas.clientHeight !== lastCH) resize();
+  // touch controls only exist while driving — menus stay clean
+  const wantControls = state === 'race' || state === 'countdown' || state === 'finish';
+  if (wantControls !== controlsShown && controlsEl) {
+    controlsShown = wantControls;
+    controlsEl.classList.toggle('ingame', wantControls);
+  }
   const dt = clamp((t - lastT) / 1000, 0, 0.033);
   lastT = t;
   const tSec = t * 0.001;

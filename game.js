@@ -1450,6 +1450,69 @@ function buildKartMesh(charIdx, veh = 0, colorOverride = null) {
   flame.visible = false;
   g.add(flame);
 
+  { // pop-out glider for the jump ramps
+    const gl = new THREE.Group();
+    const wingMat = new THREE.MeshStandardMaterial({ color, roughness: 0.5, side: THREE.DoubleSide });
+    const wl = new THREE.Mesh(new THREE.PlaneGeometry(20, 30), wingMat);
+    wl.rotation.set(-Math.PI / 2, 0, 0.42);
+    wl.position.set(-4, 0, -12);
+    const wr = new THREE.Mesh(new THREE.PlaneGeometry(20, 30), wingMat);
+    wr.rotation.set(-Math.PI / 2, 0, -0.42);
+    wr.position.set(-4, 0, 12);
+    gl.add(wl, wr);
+    const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 15, 6),
+      new THREE.MeshStandardMaterial({ color: 0x2a2a34, roughness: 0.6 }));
+    strut.position.set(-2, -8, 0);
+    gl.add(strut);
+    gl.position.set(0, 26, 0);
+    gl.visible = false;
+    chassis.add(gl);
+    var gliderRef = gl;
+  }
+  let underGlow = null;
+  { // coloured neon puddle under the car
+    const ug = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: glowWhite, color: color.clone(), blending: THREE.AdditiveBlending,
+      depthWrite: false, opacity: 0.3,
+    }));
+    ug.position.set(0, 1.4, 0);
+    ug.scale.set(52, 22, 1);
+    chassis.add(ug);
+    underGlow = ug;
+  }
+  let brakeGlow = null;
+  {
+    const bg = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: glowWhite, color: new THREE.Color(2.4, 0.2, 0.15), blending: THREE.AdditiveBlending,
+      depthWrite: false, opacity: 0.85,
+    }));
+    bg.position.set(-20, 9, 0);
+    bg.scale.set(16, 8, 1);
+    bg.visible = false;
+    chassis.add(bg);
+    brakeGlow = bg;
+  }
+  let beams = null;
+  { // fake headlight cones for night circuits
+    const bgrp = new THREE.Group();
+    const beamGeo = new THREE.BufferGeometry();
+    beamGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+      0, 0, -2.5, 110, -6, -20, 110, -6, 14,
+      0, 0, 2.5, 110, -6, -14, 110, -6, 20,
+    ], 3));
+    beamGeo.computeVertexNormals();
+    const beamMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(1.4, 1.3, 1.0), transparent: true, opacity: 0.11,
+      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+    });
+    const bm = new THREE.Mesh(beamGeo, beamMat);
+    bgrp.add(bm);
+    bgrp.position.set(20, 9, 0);
+    bgrp.visible = false;
+    chassis.add(bgrp);
+    beams = bgrp;
+  }
+
   const sparks = [];
   for (const sz of [-11, 11]) {
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({
@@ -1469,7 +1532,7 @@ function buildKartMesh(charIdx, veh = 0, colorOverride = null) {
   starHalo.visible = false;
   g.add(starHalo);
   scene.add(g);
-  return { group: g, chassis, wheels, flame, sparks, starHalo, bodyMat, baseColor: color.clone(), veh, colorOv: colorOverride, hover: vg.hover, thrusterSprites };
+  return { group: g, chassis, wheels, flame, sparks, starHalo, bodyMat, baseColor: color.clone(), veh, colorOv: colorOverride, hover: vg.hover, thrusterSprites, glider: gliderRef, underGlow, brakeGlow, beams };
 }
 
 let kartMeshes = CHARACTERS.map((_, i) => buildKartMesh(i, i === 0 ? vehSel : DEFAULT_VEH[i]));
@@ -1700,7 +1763,7 @@ const balloons = [];
    ============================================================ */
 let center = [];
 let track = null;
-let BOOST_IDX = [], BOX_IDX = [];
+let BOOST_IDX = [], BOX_IDX = [], JUMP_IDX = [];
 
 function sampleCenterline(ctrl, hills = 0) {
   const M = ctrl.length, per = Math.floor(N / M), pts = [];
@@ -1978,6 +2041,7 @@ function buildTrack(mapIdx) {
   const cl = sampleCenterline(map.ctrl, theme.hills || 0);
   center = cl;
   BOOST_IDX = [Math.floor(N * 0.30), Math.floor(N * 0.63), Math.floor(N * 0.86)];
+  JUMP_IDX = [Math.floor(N * 0.47), Math.floor(N * 0.76)];
   BOX_IDX = [Math.floor(N * 0.12), Math.floor(N * 0.48), Math.floor(N * 0.76)];
 
   const group = new THREE.Group();
@@ -2035,6 +2099,7 @@ function buildTrack(mapIdx) {
     return (noise2(x, z) * 0.65 + noise2(x * 2.3 + 991, z * 2.3) * 0.25 + noise2(x * 5.1, z * 5.1 + 313) * 0.1) * tAmp * 2 * fade;
   };
   track.terrainH = terrainH;
+  track.nightGlow = (theme.stars || 0) > 100; // night circuits get beams + strong underglow
   // exact ground surface height (same blend as the ground mesh) so karts
   // never sink under embankments when they leave the road
   track.groundYAt = (x, z, hint = 0) => {
@@ -2251,6 +2316,15 @@ function buildTrack(mapIdx) {
     );
     group.add(m);
     track.boostPads.push({ tex });
+  }
+
+  // jump ramps: blazing orange slices that throw the karts into the air
+  for (const ji of JUMP_IDX) {
+    const m = new THREE.Mesh(
+      ribbonSlice(cl, (ji - 3 + N) % N, 6, HALFW * 0.8, 0.2, 1),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 1.1, 0.25), side: THREE.DoubleSide })
+    );
+    group.add(m);
   }
 
   // item boxes
@@ -3047,6 +3121,7 @@ function makeKart(charIdx, isPlayer, gridPos) {
     aiSkill: 0.87 + (gridPos % 7) * 0.017,
     laneSeed: gridPos * 1.7,
     steerVis: 0, wheelSpin: 0, wrongWayT: 0,
+    airH: 0, airV: 0, hopT: 0, squashT: 0, braking: false,
     netDriven: false, isRemotePlayer: false, netT: null,
   };
 }
@@ -3569,7 +3644,7 @@ function netOnData(m, fromConn) {
       k.lap = m.l | 0; k.trackIdx = (m.ti | 0) % N;
       k.key = k.lap * N + k.trackIdx;
       k.spinT = +m.sp || 0; k.starT = +m.st || 0; k.boostT = +m.b || 0;
-      k.coins = m.co | 0; k.steerVis = +m.sv || 0;
+      k.coins = m.co | 0; k.steerVis = +m.sv || 0; k.airH = +m.ah || 0;
     }
   } else if (m.t === 'ai') {                // host's AI fleet (guest side)
     if (!net.isHost && Array.isArray(m.ks)) for (const s of m.ks) {
@@ -3736,7 +3811,7 @@ function netTick(dt) {
     const msg = {
       t: 'pst', c: net.myChar, x: +k.x.toFixed(1), y: +k.y.toFixed(1), a: +k.angle.toFixed(3), s: +k.speed.toFixed(1),
       l: k.lap, ti: k.trackIdx, sp: +k.spinT.toFixed(2), st: +k.starT.toFixed(2), b: +k.boostT.toFixed(2),
-      co: k.coins, sv: +k.steerVis.toFixed(2),
+      co: k.coins, sv: +k.steerVis.toFixed(2), ah: +k.airH.toFixed(1),
     };
     netSend(msg);
   }
@@ -3829,12 +3904,14 @@ function updateKart(k, dt) {
 
   const grip = clamp(k.speed / 70, 0, 1);
   const hiSpd = 1 - 0.32 * clamp(k.speed / BOOSTSPEED, 0, 1); // stable at speed
-  k.angle += steer * TURNRATE * grip * hiSpd * dt;
+  k.angle += steer * TURNRATE * grip * hiSpd * (k.airH > 0 ? 0.4 : 1) * dt;
+  k.braking = throttle < 0;
   k.steerVis = lerp(k.steerVis, steer, Math.min(1, dt * 14));
 
   if (k.isPlayer) {
     const sDir = Math.abs(steer) > 0.3 ? Math.sign(steer) : 0;
     if (sDir !== 0 && k.speed > maxSp * 0.72 && (k.driftDir === 0 || k.driftDir === sDir)) {
+      if (k.driftDir === 0 && k.airH <= 0) k.hopT = 0.28; // MK-style hop into the drift
       k.driftDir = sDir;
       k.driftCharge += dt;
     } else {
@@ -3858,6 +3935,26 @@ function updateKart(k, dt) {
         if (k.isPlayer) beep(240, 0.3, 'sawtooth', 800, 0.13);
         break;
       }
+  }
+  // jump ramps: launch, glide down softly, squash on landing
+  if (k.airH <= 0 && k.speed > 100 && lat < HALFW * 0.85) {
+    for (const ji of JUMP_IDX)
+      if (idxDist(k.trackIdx, ji) <= 2) {
+        k.airV = 46 + k.speed * 0.1;
+        k.airH = 0.01;
+        if (k.isPlayer) beep(320, 0.22, 'sawtooth', 760, 0.14);
+        break;
+      }
+  }
+  if (k.airH > 0) {
+    k.airV -= (k.airV < 0 && k.airH > 9 ? 85 : 290) * dt; // the glider slows the fall
+    if (k.airV < -32 && k.airH > 9) k.airV = -32;
+    k.airH += k.airV * dt;
+    if (k.airH <= 0) {
+      k.airH = 0; k.airV = 0;
+      k.squashT = 0.3;
+      if (k.isPlayer) beep(130, 0.12, 'sawtooth', 65, 0.16);
+    }
   }
   k.speed = clamp(k.speed, 0, boostSp);
   k.wheelSpin += k.speed * dt / 5.5;
@@ -4018,9 +4115,11 @@ function syncKartMeshes(dt) {
     const c = center[k.trackIdx];
     const lat = lateralOffset(k, c);
     const onRoad = Math.abs(lat) < HALFW + 30;
-    const targetY = onRoad ? roadY(c, lat) : track.groundYAt(k.x, k.y, k.trackIdx) + 0.6;
+    const hop = k.hopT > 0 ? Math.sin((0.28 - k.hopT) / 0.28 * Math.PI) * 6 : 0;
+    if (k.hopT > 0) k.hopT -= dt;
+    const targetY = (onRoad ? roadY(c, lat) : track.groundYAt(k.x, k.y, k.trackIdx) + 0.6) + k.airH + hop;
     if (k.visY === undefined) k.visY = targetY;
-    k.visY = lerp(k.visY, targetY, Math.min(1, dt * 10));
+    k.visY = k.airH > 0 ? targetY : lerp(k.visY, targetY, Math.min(1, dt * 10));
     m.group.visible = true;
     m.group.position.set(k.x, k.visY, k.y);
     // full 3D orientation from the road surface normal: the kart sits flat on
@@ -4047,9 +4146,25 @@ function syncKartMeshes(dt) {
     _kb.m4.makeBasis(_kb.vf, _kb.vn, _kb.vr);
     _kb.q.setFromRotationMatrix(_kb.m4);
     m.group.quaternion.slerp(_kb.q, Math.min(1, dt * 12));
-    // chassis keeps only the playful lean + acceleration squat
+    // chassis: playful lean, squat, airborne pitch, landing squash
     m.chassis.rotation.x = k.steerVis * 0.10;
-    m.chassis.rotation.z = clamp(k.speed * 0.0004, 0, 0.1) - (k.boostT > 0 ? 0.06 : 0);
+    m.chassis.rotation.z = clamp(k.speed * 0.0004, 0, 0.1) - (k.boostT > 0 ? 0.06 : 0)
+      + (k.airH > 0 ? clamp(-k.airV * 0.004, -0.28, 0.22) : 0);
+    if (k.squashT > 0) {
+      k.squashT -= dt;
+      const q = Math.sin(clamp(k.squashT / 0.3, 0, 1) * Math.PI);
+      m.chassis.scale.set(1 + q * 0.10, 1 - q * 0.20, 1 + q * 0.10);
+    } else {
+      const st2 = k.boostT > 0 ? 0.05 : 0;
+      m.chassis.scale.set(1 + st2, 1 - st2 * 0.5, 1);
+    }
+    if (m.glider) {
+      m.glider.visible = k.airH > 6;
+      if (m.glider.visible) m.glider.rotation.z = Math.sin(perfNow * 0.006 + k.laneSeed) * 0.08;
+    }
+    if (m.underGlow) m.underGlow.material.opacity = track.nightGlow ? 0.42 : 0.16;
+    if (m.brakeGlow) m.brakeGlow.visible = !!k.braking && k.speed > 25 && k.airH <= 0;
+    if (m.beams) m.beams.visible = !!track.nightGlow && (k.isPlayer || k.isRemotePlayer);
     m.chassis.position.y = m.hover
       ? 2.2 + Math.sin(perfNow * 0.004 + k.laneSeed * 7) * 1.1
       : Math.sin(perfNow * 0.02 + k.laneSeed * 7) * clamp(k.speed * 0.004, 0, 0.5); // hover or suspension
@@ -4076,8 +4191,15 @@ function syncKartMeshes(dt) {
       m.bodyMat.emissive.setRGB(0, 0, 0);
       m.starHalo.visible = false;
     }
-    const drifting = k.isPlayer && k.driftCharge > 1.05;
-    for (const sp of m.sparks) sp.visible = drifting;
+    const tier = k.isPlayer ? (k.driftCharge > 1.05 ? 2 : k.driftCharge > 0.35 ? 1 : 0) : 0;
+    for (const sp of m.sparks) {
+      sp.visible = tier > 0 && k.airH <= 0;
+      if (sp.visible) {
+        sp.material.color.setRGB(...(tier === 2 ? [2.4, 1.2, 0.3] : [0.5, 1.8, 2.4]));
+        const ss = (tier === 2 ? 20 : 13) + Math.sin(perfNow * 0.05 + k.laneSeed) * 4;
+        sp.scale.set(ss, ss, 1);
+      }
+    }
   }
   const active = new Set(karts.map(k => k.charIdx));
   kartMeshes.forEach((m, i) => { if (!active.has(i)) m.group.visible = false; });

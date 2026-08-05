@@ -2,6 +2,12 @@
 
 Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker (`sw.js`) : chaque bump déclenche la mise à jour automatique de tous les clients installés.
 
+## v15 — Garage de véhicules + boutons CONTINUER
+
+- **6 véhicules aux formes réellement différentes** : Kart classique, **Formule** (F1 à roues apparentes, ailerons), **Pod Racer** façon Star Wars (double nacelle + cockpit, en lévitation avec propulseurs lumineux), **Speeder** volant (moto anti-grav à fourches), **Brique** style Lego (carrosserie cubique à tenons chromés), **Fusée** (corps de rocket à hublots et tuyère). Sélecteur « VÉHICULE ‹ › » à l'étape pilote, mémorisé ; chaque IA roule dans son propre type de véhicule.
+- Véhicules volants : bob de lévitation + propulseurs pulsants, pas de roues.
+- **Bouton « CONTINUER ▶ » / « C'EST PARTI ! 🏁 »** bien visible en bas de chaque écran de sélection — plus besoin de deviner où taper.
+
 ## v14 — Horizon en vraie 3D + bouton recommencer
 
 - **Fini le fond carton-pâte** : une chaîne de ~40 montagnes low-poly 3D entoure chaque monde (parallaxe réelle, fondu dans la brume, sommets enneigés sur Néon/Paris/Biarritz, masquées côté océan sur les cartes littorales).

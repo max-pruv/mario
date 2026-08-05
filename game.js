@@ -510,8 +510,15 @@ function makeFaceTexture(skin = '#f6c9a0') {
   return t;
 }
 
-// shared merged geometries (same for every kart; colors come from materials)
-const KART_GEO = (() => {
+// ---------------- Vehicle garage: 6 truly different shapes ----------------
+const VEHICLES = ['KART', 'FORMULE', 'POD RACER', 'SPEEDER', 'BRIQUE', 'FUSÉE'];
+const DEFAULT_VEH = [0, 1, 4, 0, 5, 2, 3, 1]; // what each AI character drives
+let vehSel = 0;
+try { vehSel = clamp(parseInt(localStorage.getItem('iam-veh') || '0', 10) || 0, 0, VEHICLES.length - 1); } catch (e) {}
+
+const VEH_GEO_CACHE = [];
+function getVehGeo(type) {
+  if (VEH_GEO_CACHE[type]) return VEH_GEO_CACHE[type];
   const body = [], dark = [], chrome = [];
   const add = (arr, geo, x, y, z, sx = 1, sy = 1, sz = 1, rx = 0, ry = 0, rz = 0) => {
     geo.scale(sx, sy, sz);
@@ -521,117 +528,198 @@ const KART_GEO = (() => {
     geo.translate(x, y, z);
     arr.push(geo);
   };
-  // --- rounded shell (no visible boxes) ---
-  add(body, new THREE.SphereGeometry(10, 24, 16), 2, 7.8, 0, 1.75, 0.66, 1.06);       // tub
-  add(body, new THREE.SphereGeometry(7, 20, 14), 17, 6.6, 0, 1.3, 0.6, 0.9);          // nose
-  add(body, new THREE.SphereGeometry(8, 18, 12), -11, 8, 0, 0.95, 0.68, 1.02);        // engine cover
-  add(body, new THREE.SphereGeometry(5.2, 14, 10), 12.5, 10.3, -11, 1.15, 0.62, 0.95); // fenders
-  add(body, new THREE.SphereGeometry(5.2, 14, 10), 12.5, 10.3, 11, 1.15, 0.62, 0.95);
-  add(body, new THREE.SphereGeometry(5.6, 14, 10), -11.5, 10.8, -12, 1.1, 0.6, 0.95);
-  add(body, new THREE.SphereGeometry(5.6, 14, 10), -11.5, 10.8, 12, 1.1, 0.6, 0.95);
-  add(body, new THREE.CapsuleGeometry(2.3, 15, 4, 10), 2, 4.8, -10.8, 1, 1, 1, 0, 0, Math.PI / 2); // side skirts
-  add(body, new THREE.CapsuleGeometry(2.3, 15, 4, 10), 2, 4.8, 10.8, 1, 1, 1, 0, 0, Math.PI / 2);
-  add(body, new THREE.CapsuleGeometry(1.4, 17, 4, 8), -16.5, 15, 0, 1, 1, 1, Math.PI / 2, 0, 0);   // rear wing
-  add(body, new THREE.CapsuleGeometry(1.5, 18, 4, 8), 23.5, 4.4, 0, 1, 1, 1, Math.PI / 2, 0, 0);   // front wing
-  // torso + arms reaching the wheel
-  add(body, new THREE.CapsuleGeometry(4.4, 5, 4, 12), -3, 14, 0, 1, 1, 0.9);
-  add(body, new THREE.CapsuleGeometry(1.7, 8, 4, 8), 1.6, 14.2, -4.4, 1, 1, 1, 0, 0, -1.05);
-  add(body, new THREE.CapsuleGeometry(1.7, 8, 4, 8), 1.6, 14.2, 4.4, 1, 1, 1, 0, 0, -1.05);
-  // --- dark parts ---
-  add(dark, new THREE.TorusGeometry(6.6, 1.5, 10, 20), -1, 11.4, 0, 1, 1, 1, Math.PI / 2, 0, 0);   // cockpit rim
-  add(dark, new THREE.SphereGeometry(5.4, 14, 10), -8.6, 13.4, 0, 0.55, 1.15, 1.05);               // seat back
-  add(dark, new THREE.CylinderGeometry(0.8, 0.8, 7.5, 8), 3.6, 11.4, 0, 1, 1, 1, 0, 0, 1.05);      // steering column
-  add(dark, new THREE.TorusGeometry(3.4, 0.9, 8, 16), 6.4, 13.2, 0, 1, 1, 1, 0, Math.PI / 2, 0.5); // steering wheel
-  add(dark, new THREE.BoxGeometry(24, 1.4, 15), 2, 3.5, 0);                                        // floor pan
-  // --- chrome ---
-  add(chrome, new THREE.CylinderGeometry(1.5, 2.0, 9, 10), -16.5, 10.6, -5, 1, 1, 1, 0, 0, 1.2);
-  add(chrome, new THREE.CylinderGeometry(1.5, 2.0, 9, 10), -16.5, 10.6, 5, 1, 1, 1, 0, 0, 1.2);
-  add(chrome, new THREE.CapsuleGeometry(1.0, 16, 4, 8), 25.5, 5.6, 0, 1, 1, 1, Math.PI / 2, 0, 0); // bumper bar
-  add(chrome, new THREE.SphereGeometry(1.5, 10, 8), 24.5, 7.2, -5.5);                              // headlights
-  add(chrome, new THREE.SphereGeometry(1.5, 10, 8), 24.5, 7.2, 5.5);
-  // fat MK8 wheels: tire + 5-spoke hub (shared)
-  const tire = new THREE.TorusGeometry(4.4, 2.8, 12, 20);
-  tire.rotateX(0);
-  const hubParts = [new THREE.CylinderGeometry(2.9, 2.9, 3.2, 12).rotateX(Math.PI / 2)];
+  let wheels = [], hover = false, seat = { x: -3, y: 14 }, thrusters = [], wheelScale = 1;
+
+  if (type === 0) { // KART classique
+    add(body, new THREE.SphereGeometry(10, 24, 16), 2, 7.8, 0, 1.75, 0.66, 1.06);
+    add(body, new THREE.SphereGeometry(7, 20, 14), 17, 6.6, 0, 1.3, 0.6, 0.9);
+    add(body, new THREE.SphereGeometry(8, 18, 12), -11, 8, 0, 0.95, 0.68, 1.02);
+    add(body, new THREE.SphereGeometry(5.2, 14, 10), 12.5, 10.3, -11, 1.15, 0.62, 0.95);
+    add(body, new THREE.SphereGeometry(5.2, 14, 10), 12.5, 10.3, 11, 1.15, 0.62, 0.95);
+    add(body, new THREE.SphereGeometry(5.6, 14, 10), -11.5, 10.8, -12, 1.1, 0.6, 0.95);
+    add(body, new THREE.SphereGeometry(5.6, 14, 10), -11.5, 10.8, 12, 1.1, 0.6, 0.95);
+    add(body, new THREE.CapsuleGeometry(2.3, 15, 4, 10), 2, 4.8, -10.8, 1, 1, 1, 0, 0, Math.PI / 2);
+    add(body, new THREE.CapsuleGeometry(2.3, 15, 4, 10), 2, 4.8, 10.8, 1, 1, 1, 0, 0, Math.PI / 2);
+    add(body, new THREE.CapsuleGeometry(1.4, 17, 4, 8), -16.5, 15, 0, 1, 1, 1, Math.PI / 2, 0, 0);
+    add(body, new THREE.CapsuleGeometry(1.5, 18, 4, 8), 23.5, 4.4, 0, 1, 1, 1, Math.PI / 2, 0, 0);
+    add(body, new THREE.CapsuleGeometry(4.4, 5, 4, 12), -3, 14, 0, 1, 1, 0.9);
+    add(body, new THREE.CapsuleGeometry(1.7, 8, 4, 8), 1.6, 14.2, -4.4, 1, 1, 1, 0, 0, -1.05);
+    add(body, new THREE.CapsuleGeometry(1.7, 8, 4, 8), 1.6, 14.2, 4.4, 1, 1, 1, 0, 0, -1.05);
+    add(dark, new THREE.TorusGeometry(6.6, 1.5, 10, 20), -1, 11.4, 0, 1, 1, 1, Math.PI / 2, 0, 0);
+    add(dark, new THREE.SphereGeometry(5.4, 14, 10), -8.6, 13.4, 0, 0.55, 1.15, 1.05);
+    add(dark, new THREE.CylinderGeometry(0.8, 0.8, 7.5, 8), 3.6, 11.4, 0, 1, 1, 1, 0, 0, 1.05);
+    add(dark, new THREE.TorusGeometry(3.4, 0.9, 8, 16), 6.4, 13.2, 0, 1, 1, 1, 0, Math.PI / 2, 0.5);
+    add(dark, new THREE.BoxGeometry(24, 1.4, 15), 2, 3.5, 0);
+    add(chrome, new THREE.CylinderGeometry(1.5, 2.0, 9, 10), -16.5, 10.6, -5, 1, 1, 1, 0, 0, 1.2);
+    add(chrome, new THREE.CylinderGeometry(1.5, 2.0, 9, 10), -16.5, 10.6, 5, 1, 1, 1, 0, 0, 1.2);
+    add(chrome, new THREE.CapsuleGeometry(1.0, 16, 4, 8), 25.5, 5.6, 0, 1, 1, 1, Math.PI / 2, 0, 0);
+    add(chrome, new THREE.SphereGeometry(1.5, 10, 8), 24.5, 7.2, -5.5);
+    add(chrome, new THREE.SphereGeometry(1.5, 10, 8), 24.5, 7.2, 5.5);
+    wheels = [[12.5, -11.5, true], [12.5, 11.5, true], [-11.5, -12.5, false], [-11.5, 12.5, false]];
+  } else if (type === 1) { // FORMULE (F1)
+    add(body, new THREE.CapsuleGeometry(3.6, 30, 6, 14), 4, 6.8, 0, 1, 1, 1, 0, 0, Math.PI / 2); // long fuselage
+    add(body, new THREE.SphereGeometry(4.6, 16, 12), 24, 6.2, 0, 1.4, 0.55, 0.7);               // nose tip
+    add(body, new THREE.SphereGeometry(6.2, 18, 12), -6, 9.5, 0, 1.2, 0.9, 0.95);               // cockpit hump
+    add(body, new THREE.BoxGeometry(3.4, 1.4, 26), 26.5, 4.2, 0);                                // front wing
+    add(body, new THREE.BoxGeometry(1.6, 4.2, 3), 26.5, 6, -13);
+    add(body, new THREE.BoxGeometry(1.6, 4.2, 3), 26.5, 6, 13);
+    add(body, new THREE.BoxGeometry(7, 1.8, 22), -18, 16.5, 0);                                  // rear wing
+    add(body, new THREE.BoxGeometry(1.6, 6, 2.4), -18, 12.5, -9);
+    add(body, new THREE.BoxGeometry(1.6, 6, 2.4), -18, 12.5, 9);
+    add(body, new THREE.SphereGeometry(3.4, 12, 10), -10, 14.5, 0, 1, 1.3, 1);                   // airbox
+    add(body, new THREE.CapsuleGeometry(1.7, 8, 4, 8), 0.6, 13.4, -3.8, 1, 1, 1, 0, 0, -1.15);
+    add(body, new THREE.CapsuleGeometry(1.7, 8, 4, 8), 0.6, 13.4, 3.8, 1, 1, 1, 0, 0, -1.15);
+    add(dark, new THREE.TorusGeometry(5.2, 1.2, 10, 18), -3, 11.6, 0, 1, 1, 1, Math.PI / 2, 0, 0);
+    add(dark, new THREE.TorusGeometry(3.1, 0.8, 8, 16), 5.4, 12.6, 0, 1, 1, 1, 0, Math.PI / 2, 0.5);
+    add(dark, new THREE.BoxGeometry(16, 1.6, 10), -6, 3.6, 0);
+    add(chrome, new THREE.CylinderGeometry(1.2, 1.6, 6, 10), -17, 8.4, -3.4, 1, 1, 1, 0, 0, Math.PI / 2);
+    add(chrome, new THREE.CylinderGeometry(1.2, 1.6, 6, 10), -17, 8.4, 3.4, 1, 1, 1, 0, 0, Math.PI / 2);
+    wheels = [[16, -12.5, true], [16, 12.5, true], [-12, -13, false], [-12, 13, false]];
+    wheelScale = 1.15;
+    seat = { x: -4, y: 13 };
+  } else if (type === 2) { // POD RACER (Star Wars)
+    for (const sz of [-11, 11]) {
+      add(body, new THREE.CapsuleGeometry(4.6, 16, 6, 14), 16, 8.5, sz, 1, 1, 1, 0, 0, Math.PI / 2); // engine pods
+      add(chrome, new THREE.ConeGeometry(4.2, 8, 12), 28, 8.5, sz, 1, 1, 1, 0, 0, -Math.PI / 2);      // intakes
+      add(dark, new THREE.BoxGeometry(10, 1.4, 3.2), 14, 12.6, sz > 0 ? sz - 2 : sz + 2);             // vanes
+      thrusters.push([6, 8.5, sz]);
+    }
+    add(dark, new THREE.CylinderGeometry(0.7, 0.7, 21, 8), 8, 9, 0, 1, 1, 1, Math.PI / 2, 0, 0);      // energy link
+    add(body, new THREE.SphereGeometry(6.8, 20, 14), -10, 9, 0, 1.5, 0.85, 1.0);                       // cockpit pod
+    add(dark, new THREE.TorusGeometry(5.2, 1.1, 8, 18), -7.5, 12.2, 0, 1, 1, 1, Math.PI / 2, 0, 0);
+    add(chrome, new THREE.CylinderGeometry(0.8, 0.8, 14, 8), 2, 9.5, -6, 1, 1, 1, 0, 0, 1.25);        // cables
+    add(chrome, new THREE.CylinderGeometry(0.8, 0.8, 14, 8), 2, 9.5, 6, 1, 1, 1, 0, 0, 1.25);
+    hover = true;
+    seat = { x: -10, y: 13 };
+    thrusters.push([-18, 7, 0]);
+  } else if (type === 3) { // SPEEDER (moto volante)
+    add(body, new THREE.CapsuleGeometry(4.8, 22, 6, 14), 0, 9.5, 0, 1, 0.85, 1, 0, 0, Math.PI / 2);   // bike body
+    add(body, new THREE.SphereGeometry(4.4, 14, 10), 13, 10, 0, 1.3, 0.7, 0.9);                        // front cowl
+    add(chrome, new THREE.CylinderGeometry(0.9, 0.9, 14, 8), 21, 8.6, -3, 1, 1, 1, 0, 0, Math.PI / 2); // prongs
+    add(chrome, new THREE.CylinderGeometry(0.9, 0.9, 14, 8), 21, 8.6, 3, 1, 1, 1, 0, 0, Math.PI / 2);
+    add(dark, new THREE.BoxGeometry(6, 1.4, 14), -4, 8, 0);                                            // foot board
+    add(dark, new THREE.SphereGeometry(3.6, 12, 8), -9, 12.4, 0, 0.7, 1, 1);                           // saddle back
+    add(body, new THREE.BoxGeometry(8, 1.2, 5), -13, 11, -5, 1, 1, 1, 0, 0, 0.3);                      // rear vanes
+    add(body, new THREE.BoxGeometry(8, 1.2, 5), -13, 11, 5, 1, 1, 1, 0, 0, 0.3);
+    add(dark, new THREE.CylinderGeometry(0.6, 0.6, 9, 8), 10, 12.8, 0, 1, 1, 1, Math.PI / 2, 0, -0.5); // handlebar
+    hover = true;
+    seat = { x: -4, y: 15 };
+    thrusters.push([-14, 7.5, 0]);
+  } else if (type === 4) { // BRIQUE (Lego)
+    add(body, new THREE.BoxGeometry(34, 8, 18), 2, 7, 0);                                              // slab body
+    add(body, new THREE.BoxGeometry(16, 7, 15), -5, 13.5, 0);                                          // cabin block
+    add(body, new THREE.BoxGeometry(8, 4, 18), 20, 6, 0);                                              // bumper block
+    for (const [px, pz] of [[13, -4.5], [13, 4.5], [8, -4.5], [8, 4.5], [-14, -4.5], [-14, 4.5]])
+      add(chrome, new THREE.CylinderGeometry(2.4, 2.4, 1.8, 12), px, 11.8 + (px < 0 ? 0 : 0), pz);      // studs
+    add(dark, new THREE.BoxGeometry(4, 5, 20), -16, 14, 0);                                            // blocky spoiler
+    add(dark, new THREE.BoxGeometry(6, 1.5, 16), 2, 3.4, 0);
+    add(dark, new THREE.TorusGeometry(3.2, 0.9, 6, 4), 4, 13.4, 0, 1, 1, 1, 0, Math.PI / 2, 0.5);       // square wheel!
+    wheels = [[12, -11.5, true], [12, 11.5, true], [-11, -11.5, false], [-11, 11.5, false]];
+    wheelScale = 0.95;
+    seat = { x: -5, y: 15.5 };
+  } else { // FUSÉE (rocket kart)
+    add(body, new THREE.CylinderGeometry(6.5, 7.5, 26, 16), 0, 9.5, 0, 1, 1, 1, 0, 0, Math.PI / 2);    // rocket body
+    add(body, new THREE.ConeGeometry(6.5, 14, 16), 20, 9.5, 0, 1, 1, 1, 0, 0, -Math.PI / 2);           // nose cone
+    for (let i = 0; i < 3; i++) {
+      const a = i / 3 * TAU + Math.PI / 2;
+      add(body, new THREE.BoxGeometry(10, 1.6, 9), -12, 9.5 + Math.cos(a) * 8, Math.sin(a) * 8, 1, 1, 1, a, 0, 0.5);
+    }
+    add(chrome, new THREE.SphereGeometry(1.8, 10, 8), 8, 13.5, -5.2);                                  // portholes
+    add(chrome, new THREE.SphereGeometry(1.8, 10, 8), 8, 13.5, 5.2);
+    add(chrome, new THREE.ConeGeometry(4.5, 7, 12), -15.5, 9.5, 0, 1, 1, 1, 0, 0, Math.PI / 2);        // nozzle
+    add(dark, new THREE.TorusGeometry(5.4, 1.2, 8, 18), -1, 14.4, 0, 1, 1, 1, Math.PI / 2, 0, 0);      // cockpit rim
+    wheels = [[11, -10.5, true], [11, 10.5, true], [-10, -10.5, false], [-10, 10.5, false]];
+    wheelScale = 0.9;
+    seat = { x: -2, y: 16 };
+  }
+
+  const geo = {
+    body: mergeGeometries(body),
+    dark: dark.length ? mergeGeometries(dark) : null,
+    chrome: chrome.length ? mergeGeometries(chrome) : null,
+    wheels, hover, seat, thrusters, wheelScale,
+  };
+  VEH_GEO_CACHE[type] = geo;
+  return geo;
+}
+
+const TIRE_GEO = new THREE.TorusGeometry(4.4, 2.8, 12, 20);
+const HUB_GEO = (() => {
+  const parts = [new THREE.CylinderGeometry(2.9, 2.9, 3.2, 12).rotateX(Math.PI / 2)];
   for (let i = 0; i < 5; i++) {
     const spoke = new THREE.BoxGeometry(1.2, 3.6, 3.0);
     spoke.translate(0, 2.4, 0);
     spoke.rotateZ(i / 5 * TAU);
-    hubParts.push(spoke);
+    parts.push(spoke);
   }
-  return {
-    body: mergeGeometries(body),
-    dark: mergeGeometries(dark),
-    chrome: mergeGeometries(chrome),
-    tire,
-    hub: mergeGeometries(hubParts),
-    // cap: dome + curved brim
-    capDome: new THREE.SphereGeometry(5.1, 18, 10, 0, TAU, 0, Math.PI * 0.52),
-    capBrim: new THREE.CylinderGeometry(5.0, 5.4, 1.0, 12, 1, false, -0.7, 1.4),
-  };
+  return mergeGeometries(parts);
 })();
+const CAP_DOME = new THREE.SphereGeometry(5.1, 18, 10, 0, TAU, 0, Math.PI * 0.52);
+const CAP_BRIM = new THREE.CylinderGeometry(5.0, 5.4, 1.0, 12, 1, false, -0.7, 1.4);
 
-function buildKartMesh(charIdx) {
+function buildKartMesh(charIdx, veh = 0) {
   const ch = CHARACTERS[charIdx];
   const color = new THREE.Color(ch.color);
+  const vg = getVehGeo(veh);
   const g = new THREE.Group();
   const chassis = new THREE.Group();
   g.add(chassis);
 
   const bodyMat = new THREE.MeshPhysicalMaterial({
-    color, roughness: 0.26, metalness: 0.45,
+    color, roughness: veh === 4 ? 0.4 : 0.26, metalness: veh === 4 ? 0.1 : 0.45,
     clearcoat: 1.0, clearcoatRoughness: 0.1, envMapIntensity: 1.15,
   });
   const darkMat = new THREE.MeshStandardMaterial({ color: 0x16161e, roughness: 0.65, metalness: 0.35 });
   const chromeMat = new THREE.MeshStandardMaterial({ color: 0xd8d8e0, roughness: 0.12, metalness: 1.0, envMapIntensity: 1.35 });
 
-  const bodyMesh = new THREE.Mesh(KART_GEO.body, bodyMat);
+  const bodyMesh = new THREE.Mesh(vg.body, bodyMat);
   bodyMesh.castShadow = true;
   chassis.add(bodyMesh);
-  const darkMesh = new THREE.Mesh(KART_GEO.dark, darkMat);
-  darkMesh.castShadow = true;
-  chassis.add(darkMesh);
-  const chromeMesh = new THREE.Mesh(KART_GEO.chrome, chromeMat);
-  chassis.add(chromeMesh);
+  if (vg.dark) { const m = new THREE.Mesh(vg.dark, darkMat); m.castShadow = true; chassis.add(m); }
+  if (vg.chrome) chassis.add(new THREE.Mesh(vg.chrome, chromeMat));
 
-  // driver head with a real cartoon face + colored cap
   const head = new THREE.Mesh(
     new THREE.SphereGeometry(4.9, 22, 16),
     new THREE.MeshStandardMaterial({ map: makeFaceTexture(), roughness: 0.65 })
   );
-  head.rotation.y = Math.PI / 2; // face forward (+X)
-  head.position.set(-3, 21, 0);
+  head.rotation.y = Math.PI / 2;
+  head.position.set(vg.seat.x, vg.seat.y + 7, 0);
   head.castShadow = true;
   chassis.add(head);
   const capMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(ch.helmet), roughness: 0.5 });
-  const cap = new THREE.Mesh(KART_GEO.capDome, capMat);
-  cap.position.set(-3.2, 21.8, 0);
+  const cap = new THREE.Mesh(CAP_DOME, capMat);
+  cap.position.set(vg.seat.x - 0.2, vg.seat.y + 7.8, 0);
   chassis.add(cap);
-  const brim = new THREE.Mesh(KART_GEO.capBrim, capMat);
+  const brim = new THREE.Mesh(CAP_BRIM, capMat);
   brim.rotation.y = Math.PI / 2;
-  brim.position.set(-0.2, 23.2, 0);
+  brim.position.set(vg.seat.x + 2.8, vg.seat.y + 9.2, 0);
   chassis.add(brim);
-  // gloved hands on the wheel
-  const gloveMat = new THREE.MeshStandardMaterial({ color: 0xf4f4f4, roughness: 0.7 });
-  for (const sz of [-3.2, 3.2]) {
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(1.5, 10, 8), gloveMat);
-    hand.position.set(6.4, 13.4, sz);
-    chassis.add(hand);
-  }
 
   const hubMat = new THREE.MeshStandardMaterial({ color: 0xe0c25a, roughness: 0.28, metalness: 0.9, envMapIntensity: 1.2 });
   const wheels = [];
-  for (const [wx, wz, front] of [[12.5, -11.5, true], [12.5, 11.5, true], [-11.5, -12.5, false], [-11.5, 12.5, false]]) {
+  for (const [wx, wz, front] of vg.wheels) {
     const steerPivot = new THREE.Group();
-    steerPivot.position.set(wx, 6.6, wz);
+    steerPivot.position.set(wx, 6.6 * vg.wheelScale, wz);
+    steerPivot.scale.setScalar(vg.wheelScale);
     const spin = new THREE.Group();
-    const tyre = new THREE.Mesh(KART_GEO.tire, darkMat);
+    const tyre = new THREE.Mesh(TIRE_GEO, darkMat);
     tyre.castShadow = true;
-    const hub = new THREE.Mesh(KART_GEO.hub, hubMat);
+    const hub = new THREE.Mesh(HUB_GEO, hubMat);
     spin.add(tyre); spin.add(hub);
     steerPivot.add(spin);
     chassis.add(steerPivot);
     wheels.push({ steerPivot, spin, front });
+  }
+  // hover thrusters
+  const thrusterSprites = [];
+  for (const [tx, ty, tz] of vg.thrusters) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: glowCyan, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.9,
+    }));
+    sp.position.set(tx, ty - 3, tz);
+    sp.scale.set(16, 16, 1);
+    g.add(sp);
+    thrusterSprites.push(sp);
   }
 
   const flame = new THREE.Sprite(new THREE.SpriteMaterial({
@@ -661,9 +749,21 @@ function buildKartMesh(charIdx) {
   starHalo.visible = false;
   g.add(starHalo);
   scene.add(g);
-  return { group: g, chassis, wheels, flame, sparks, starHalo, bodyMat, baseColor: color.clone() };
+  return { group: g, chassis, wheels, flame, sparks, starHalo, bodyMat, baseColor: color.clone(), veh, hover: vg.hover, thrusterSprites };
 }
-const kartMeshes = CHARACTERS.map((_, i) => buildKartMesh(i));
+
+let kartMeshes = CHARACTERS.map((_, i) => buildKartMesh(i, i === 0 ? vehSel : DEFAULT_VEH[i]));
+
+// rebuild any kart whose vehicle should change (player picks vehSel, AI keep theirs)
+function ensureKartMeshes() {
+  for (let i = 0; i < CHARACTERS.length; i++) {
+    const want = i === menuChar ? vehSel : DEFAULT_VEH[i];
+    if (kartMeshes[i].veh !== want) {
+      scene.remove(kartMeshes[i].group);
+      kartMeshes[i] = buildKartMesh(i, want);
+    }
+  }
+}
 
 /* ---------------- Item prototypes ---------------- */
 const bananaProto = (() => {
@@ -2039,7 +2139,7 @@ let countdownT = 0, raceTime = 0, finishDelay = 0;
 let camAngle = 0;
 let lastBeep = -1;
 let newRecordRank = -1;
-let prevStart = false, prevLeft = false, prevRight = false, prevItem = false;
+let prevStart = false, prevLeft = false, prevRight = false, prevItem = false, prevGas = false;
 
 function clearProjectiles() {
   for (const b of bananas) scene.remove(b.mesh);
@@ -2049,6 +2149,7 @@ function clearProjectiles() {
 
 function resetRace(playerChar) {
   clearProjectiles();
+  ensureKartMeshes();
   karts = [];
   const order = [playerChar];
   for (let i = 0; i < CHARACTERS.length; i++) if (i !== playerChar) order.push(i);
@@ -2360,7 +2461,13 @@ function syncKartMeshes(dt) {
     // lean into turns + follow the road camber and slope
     m.chassis.rotation.x = k.steerVis * 0.10 - (onRoad ? c.bank : 0);
     m.chassis.rotation.z = clamp(k.speed * 0.0004, 0, 0.1) - (k.boostT > 0 ? 0.06 : 0) + (onRoad ? Math.atan(c.slope) * 0.8 : 0);
-    m.chassis.position.y = Math.sin(perfNow * 0.02 + k.laneSeed * 7) * clamp(k.speed * 0.004, 0, 0.5); // suspension
+    m.chassis.position.y = m.hover
+      ? 2.2 + Math.sin(perfNow * 0.004 + k.laneSeed * 7) * 1.1
+      : Math.sin(perfNow * 0.02 + k.laneSeed * 7) * clamp(k.speed * 0.004, 0, 0.5); // hover or suspension
+    if (m.thrusterSprites) for (const tsp of m.thrusterSprites) {
+      const ts = 13 + Math.sin(perfNow * 0.03 + k.laneSeed) * 3 + clamp(k.speed * 0.02, 0, 6);
+      tsp.scale.set(ts, ts, 1);
+    }
     for (const w of m.wheels) {
       if (w.front) w.steerPivot.rotation.y = -k.steerVis * 0.45;
       w.spin.rotation.z = -k.wheelSpin;
@@ -2731,6 +2838,21 @@ const mapThumbs = MAPS.map((m) => {
   return c;
 });
 
+function drawGoButton(label) {
+  const w = 250, h = 36;
+  const x = HW / 2 - w / 2, y = HB - 50;
+  const grad = hctx.createLinearGradient(0, y, 0, y + h);
+  grad.addColorStop(0, '#4fc3ff');
+  grad.addColorStop(1, '#2a7ae0');
+  hctx.fillStyle = grad;
+  hctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  hctx.lineWidth = 2.5;
+  hctx.beginPath(); hctx.roundRect(x, y, w, h, 18); hctx.fill(); hctx.stroke();
+  const pulse = 1 + Math.sin(perfNow * 0.006) * 0.02;
+  text(label, HW / 2, y + 8, 17 * pulse, 'center', '#fff');
+  hitR(x - 10, y - 8, w + 20, h + 16, { t: 'go' });
+}
+
 function stepHeader(step, label) {
   text(`ÉTAPE ${step}/3`, HW / 2, OY + 14, 11, 'center', '#ff50dc');
   text(label, HW / 2, OY + 28, 22, 'center', '#40e0ff');
@@ -2743,8 +2865,7 @@ function drawTitle() {
   hctx.fillRect(0, 0, HW, HB);
   text('IAM KART', HW / 2, OY + 50, 58, 'center', '#40e0ff');
   text('Inès · Alice · Marlon', HW / 2, OY + 112, 16, 'center', '#ff50dc');
-  const blink = (perfNow / 500 | 0) % 2 === 0;
-  if (blink) text('TOUCHE / ENTRÉE POUR COMMENCER', HW / 2, OY + 220, 15, 'center', '#fff');
+  drawGoButton('JOUER ▶');
   text('← → choisir · Entrée valider · B retour · A gaz · B objet en course', HW / 2, OY + 292, 9, 'center', '#9ab');
 }
 
@@ -2765,8 +2886,7 @@ function drawCcSelect() {
     text(cc.label, HW / 2 - 70, y, 24, 'left', sel ? '#ffd24a' : '#eee');
     text(cc.desc, HW / 2 + 70, y + 7, 14, 'right', sel ? '#fff' : '#9ab');
   });
-  const blink = (perfNow / 500 | 0) % 2 === 0;
-  if (blink) text('TOUCHE / ENTRÉE POUR VALIDER', HW / 2, OY + 268, 14, 'center', '#fff');
+  drawGoButton('CONTINUER ▶');
 }
 
 function drawCharSelect() {
@@ -2778,13 +2898,20 @@ function drawCharSelect() {
   hitR(HW / 2 - 165, OY + 100, 90, 95, { t: 'nav', d: -1 });
   hitR(HW / 2 + 75, OY + 100, 90, 95, { t: 'nav', d: 1 });
   text(ch.name, HW / 2, OY + 62, 26, 'center', ch.color);
+  // vehicle picker
+  text('VÉHICULE', HW / 2, OY + 186, 10, 'center', '#9ab');
+  text('‹', HW / 2 - 95, OY + 196, 22, 'center', '#fff');
+  text('›', HW / 2 + 95, OY + 196, 22, 'center', '#fff');
+  text(VEHICLES[vehSel], HW / 2, OY + 200, 16, 'center', '#ffd24a');
+  hitR(HW / 2 - 130, OY + 188, 70, 34, { t: 'veh', d: -1 });
+  hitR(HW / 2 + 60, OY + 188, 70, 34, { t: 'veh', d: 1 });
   // MK-style character grid
   const tile = 34, gap = 8;
   const total = CHARACTERS.length * tile + (CHARACTERS.length - 1) * gap;
   const x0 = HW / 2 - total / 2;
   CHARACTERS.forEach((c, i) => {
     const x = x0 + i * (tile + gap);
-    const y = OY + 232;
+    const y = OY + 224;
     const sel = i === menuChar;
     hitR(x - 4, y - 6, tile + 8, tile + 22, { t: 'char', i });
     hctx.fillStyle = c.color;
@@ -2801,8 +2928,7 @@ function drawCharSelect() {
     hctx.beginPath(); hctx.arc(x + tile / 2, y + 12, 7, 0, TAU); hctx.fill();
     text(c.name.slice(0, 3), x + tile / 2, y + tile + 4, 8, 'center', sel ? '#fff' : '#9ab');
   });
-  const blink = (perfNow / 500 | 0) % 2 === 0;
-  if (blink) text('TOUCHE / ENTRÉE POUR VALIDER', HW / 2, OY + 292, 13, 'center', '#fff');
+  drawGoButton('CONTINUER ▶');
 }
 
 function drawMapSelect() {
@@ -2843,8 +2969,7 @@ function drawMapSelect() {
       hctx.strokeRect(x - 2, y - 2, th + 4, th + 4);
     }
   });
-  const blink = (perfNow / 500 | 0) % 2 === 0;
-  if (blink) text('TOUCHE / ENTRÉE POUR COURIR !', HW / 2, OY + 292, 13, 'center', '#fff');
+  drawGoButton('C’EST PARTI ! 🏁');
 }
 
 function drawCountdown() {
@@ -2932,6 +3057,13 @@ function frame(t) {
         resetRace(menuChar);
       }
       beep(480, 0.06, 'square');
+    } else if (a.t === 'go') {
+      tapStart = true;
+    } else if (a.t === 'veh') {
+      vehSel = (vehSel + VEHICLES.length + a.d) % VEHICLES.length;
+      try { localStorage.setItem('iam-veh', String(vehSel)); } catch (e) {}
+      ensureKartMeshes();
+      beep(480, 0.06, 'square');
     } else if (a.t === 'restart') {
       if (state === 'race' || state === 'countdown' || state === 'finish') {
         resetRace(menuChar);
@@ -2953,7 +3085,9 @@ function frame(t) {
   const leftPressed = effLeft && !prevLeft;
   const rightPressed = effRight && !prevRight;
   const itemPressed = input.item && !prevItem;
+  const gasNow = input.gas;
   prevStart = input.start; prevLeft = effLeft; prevRight = effRight; prevItem = input.item;
+  const wasGas = prevGas; prevGas = gasNow;
 
   if (window.__iamUpdateReady && state !== 'race' && state !== 'countdown') {
     window.__iamUpdateReady = false;
@@ -2981,9 +3115,10 @@ function frame(t) {
     if (itemPressed) { state = 'title'; beep(360, 0.08, 'square'); }
     else if (startPressed) { ccMul = CC_CLASSES[ccSel].mul; state = 'char'; beep(560, 0.08, 'square'); }
   } else if (state === 'char') {
-    // étape 2/3 : pilote (gros plan MK sur le kart)
+    // étape 2/3 : pilote + véhicule (gros plan MK)
     if (leftPressed) menuChar = (menuChar + CHARACTERS.length - 1) % CHARACTERS.length;
     if (rightPressed) menuChar = (menuChar + 1) % CHARACTERS.length;
+    if (gasNow && !wasGas) uiQueue.push({ t: 'veh', d: 1 });
     if (karts.length === 0 || karts[0].charIdx !== menuChar) { resetRace(menuChar); beep(480, 0.06, 'square'); }
     if (itemPressed) { state = 'cc'; beep(360, 0.08, 'square'); }
     else if (startPressed) { state = 'map'; beep(560, 0.08, 'square'); }
@@ -3093,6 +3228,8 @@ window.IAM = {
   CHARACTERS, MAPS,
   records: loadRecords,
   get hud() { return { HW, HB, OY }; },
+  get vehSel() { return vehSel; },
+  setVeh(v) { uiQueue.push({ t: 'veh', d: v - vehSel }); },
   makePlayerAI() { if (player) player.isPlayer = false; },
   start(mapIdx = 0, ccIdx = 2, charIdx = 0) {
     menuChar = charIdx; mapSel = mapIdx; ccSel = ccIdx;

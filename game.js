@@ -3290,7 +3290,19 @@ const net = {
 
 function peerOpts() {
   const o = window.__iamPeerOpts; // test override (local PeerServer)
-  return o ? Object.assign({ debug: 0 }, o) : { debug: 0 };
+  const base = {
+    debug: 0,
+    config: {
+      iceServers: [
+        { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+        // free public TURN relays: get 4G <-> Wi-Fi games through carrier NATs
+        { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+        { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+      ],
+    },
+  };
+  return o ? Object.assign(base, o) : base;
 }
 
 // guest: send to the host — host: broadcast to every guest
@@ -3500,7 +3512,8 @@ function netConnectTo(code) {
   if (!net.peer || net.peer.destroyed) return;
   net.code = String(code);
   if (!net.peer.open) { net.pendingConnect = String(code); return; }
-  net.status = 'Connexion…';
+  net.status = 'Connexion au joueur…';
+  net.connectAt = performance.now();
   const c = net.peer.connect('iamkart-' + code, { reliable: true, serialization: 'json' });
   if (c) guestAttach(c);
 }
@@ -3508,6 +3521,7 @@ function netConnectTo(code) {
 function guestAttach(c) {
   net.conn = c;
   c.on('open', () => {
+    net.connectAt = 0;
     net.lostT = 0; net.retryT = 0; net.error = ''; net.status = '';
     beep(660, 0.12, 'square', 990);
     if (state === 'race' || state === 'countdown' || state === 'finish') {
@@ -3776,6 +3790,24 @@ function netLerpKart(k, dt) {
 
 // periodic sends + reconnection windows
 function netTick(dt) {
+  // lobby watchdogs: never leave the kids staring at a stuck screen
+  if (net.active && state === 'mp-join' && net.conn && !net.conn.open && net.connectAt) {
+    if (performance.now() - net.connectAt > 14000) {
+      net.connectAt = 0;
+      try { net.conn.close(); } catch (e) {}
+      net.conn = null;
+      net.joinCode = '';
+      net.status = '';
+      net.error = 'Connexion impossible — re-tape le code pour réessayer';
+    }
+  }
+  if (net.active && net.isHost && state === 'mp-host' && net.peer) {
+    if (!net.peer.open && !net.hostWarnAt) net.hostWarnAt = performance.now();
+    if (net.peer.open) net.hostWarnAt = 0;
+    else if (net.hostWarnAt && performance.now() - net.hostWarnAt > 9000 && !net.error) {
+      net.error = 'Annuaire injoignable — vérifie ta connexion Internet';
+    }
+  }
   if (micBtn) {
     const show = netLinkUp();
     if ((micBtn.style.display === 'none') === show) updateMicBtn();

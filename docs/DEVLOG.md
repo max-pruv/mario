@@ -2,11 +2,13 @@
 
 Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker (`sw.js`) : chaque bump déclenche la mise à jour automatique de tous les clients installés.
 
-## v15 — Garage de véhicules + boutons CONTINUER
+## v15 — Garage de véhicules, boutons CONTINUER, leaderboard nominatif
 
 - **6 véhicules aux formes réellement différentes** : Kart classique, **Formule** (F1 à roues apparentes, ailerons), **Pod Racer** façon Star Wars (double nacelle + cockpit, en lévitation avec propulseurs lumineux), **Speeder** volant (moto anti-grav à fourches), **Brique** style Lego (carrosserie cubique à tenons chromés), **Fusée** (corps de rocket à hublots et tuyère). Sélecteur « VÉHICULE ‹ › » à l'étape pilote, mémorisé ; chaque IA roule dans son propre type de véhicule.
 - Véhicules volants : bob de lévitation + propulseurs pulsants, pas de roues.
+- **Passe de détail** : pneus à sculptures (texture de bande de roulement), disques de frein + étriers rouges, rétroviseurs chromés (Kart/F1), **halo de sécurité F1**, plaques numérotées par personnage, bandes néon sous les véhicules volants.
 - **Bouton « CONTINUER ▶ » / « C'EST PARTI ! 🏁 »** bien visible en bas de chaque écran de sélection — plus besoin de deviner où taper.
+- **Leaderboard nominatif** : à la fin de la course, une fenêtre demande le prénom — saisie clavier **ou reconnexion en 1 tap** aux joueurs passés (mémorisés). Chaque record stocke prénom, date, véhicule, personnage et **le temps de chaque tour** dans la base locale JSON (localStorage). « Meilleur tour » affiché à l'arrivée.
 
 ## v14 — Horizon en vraie 3D + bouton recommencer
 

@@ -157,11 +157,16 @@ const KEYMAP = {
   Enter: 'start',
 };
 addEventListener('keydown', e => {
+  if (e.target && e.target.tagName === 'INPUT') return; // typing a name
   const k = KEYMAP[e.code];
   if (k) { input[k] = true; e.preventDefault(); unlockAudio(); }
   else if (e.code === 'KeyR') uiQueue.push({ t: 'restart' });
 });
-addEventListener('keyup', e => { const k = KEYMAP[e.code]; if (k) { input[k] = false; e.preventDefault(); } });
+addEventListener('keyup', e => {
+  if (e.target && e.target.tagName === 'INPUT') return;
+  const k = KEYMAP[e.code];
+  if (k) { input[k] = false; e.preventDefault(); }
+});
 
 function bindBtn(id, key) {
   const el = document.getElementById(id);
@@ -529,6 +534,8 @@ function getVehGeo(type) {
     arr.push(geo);
   };
   let wheels = [], hover = false, seat = { x: -3, y: 14 }, thrusters = [], wheelScale = 1;
+  let plate = null;
+  const glow = [];
 
   if (type === 0) { // KART classique
     add(body, new THREE.SphereGeometry(10, 24, 16), 2, 7.8, 0, 1.75, 0.66, 1.06);
@@ -555,7 +562,10 @@ function getVehGeo(type) {
     add(chrome, new THREE.CapsuleGeometry(1.0, 16, 4, 8), 25.5, 5.6, 0, 1, 1, 1, Math.PI / 2, 0, 0);
     add(chrome, new THREE.SphereGeometry(1.5, 10, 8), 24.5, 7.2, -5.5);
     add(chrome, new THREE.SphereGeometry(1.5, 10, 8), 24.5, 7.2, 5.5);
+    add(chrome, new THREE.SphereGeometry(1.1, 8, 8), 2, 13.2, -8.2); // mirrors
+    add(chrome, new THREE.SphereGeometry(1.1, 8, 8), 2, 13.2, 8.2);
     wheels = [[12.5, -11.5, true], [12.5, 11.5, true], [-11.5, -12.5, false], [-11.5, 12.5, false]];
+    plate = [26.5, 6.4];
   } else if (type === 1) { // FORMULE (F1)
     add(body, new THREE.CapsuleGeometry(3.6, 30, 6, 14), 4, 6.8, 0, 1, 1, 1, 0, 0, Math.PI / 2); // long fuselage
     add(body, new THREE.SphereGeometry(4.6, 16, 12), 24, 6.2, 0, 1.4, 0.55, 0.7);               // nose tip
@@ -574,9 +584,13 @@ function getVehGeo(type) {
     add(dark, new THREE.BoxGeometry(16, 1.6, 10), -6, 3.6, 0);
     add(chrome, new THREE.CylinderGeometry(1.2, 1.6, 6, 10), -17, 8.4, -3.4, 1, 1, 1, 0, 0, Math.PI / 2);
     add(chrome, new THREE.CylinderGeometry(1.2, 1.6, 6, 10), -17, 8.4, 3.4, 1, 1, 1, 0, 0, Math.PI / 2);
+    add(dark, new THREE.TorusGeometry(4.6, 0.7, 8, 14, Math.PI), -3, 15.5, 0, 1, 1, 1, 0, Math.PI / 2, 0); // halo
+    add(chrome, new THREE.SphereGeometry(1.0, 8, 8), 3, 12.4, -6.4); // mirrors
+    add(chrome, new THREE.SphereGeometry(1.0, 8, 8), 3, 12.4, 6.4);
     wheels = [[16, -12.5, true], [16, 12.5, true], [-12, -13, false], [-12, 13, false]];
     wheelScale = 1.15;
     seat = { x: -4, y: 13 };
+    plate = [28.8, 5.6];
   } else if (type === 2) { // POD RACER (Star Wars)
     for (const sz of [-11, 11]) {
       add(body, new THREE.CapsuleGeometry(4.6, 16, 6, 14), 16, 8.5, sz, 1, 1, 1, 0, 0, Math.PI / 2); // engine pods
@@ -589,6 +603,11 @@ function getVehGeo(type) {
     add(dark, new THREE.TorusGeometry(5.2, 1.1, 8, 18), -7.5, 12.2, 0, 1, 1, 1, Math.PI / 2, 0, 0);
     add(chrome, new THREE.CylinderGeometry(0.8, 0.8, 14, 8), 2, 9.5, -6, 1, 1, 1, 0, 0, 1.25);        // cables
     add(chrome, new THREE.CylinderGeometry(0.8, 0.8, 14, 8), 2, 9.5, 6, 1, 1, 1, 0, 0, 1.25);
+    for (const sz of [-11, 11]) {
+      const strip = new THREE.BoxGeometry(14, 0.8, 0.8);
+      strip.translate(14, 11.2, sz);
+      glow.push(strip);
+    }
     hover = true;
     seat = { x: -10, y: 13 };
     thrusters.push([-18, 7, 0]);
@@ -602,6 +621,11 @@ function getVehGeo(type) {
     add(body, new THREE.BoxGeometry(8, 1.2, 5), -13, 11, -5, 1, 1, 1, 0, 0, 0.3);                      // rear vanes
     add(body, new THREE.BoxGeometry(8, 1.2, 5), -13, 11, 5, 1, 1, 1, 0, 0, 0.3);
     add(dark, new THREE.CylinderGeometry(0.6, 0.6, 9, 8), 10, 12.8, 0, 1, 1, 1, Math.PI / 2, 0, -0.5); // handlebar
+    {
+      const strip = new THREE.BoxGeometry(20, 0.7, 3);
+      strip.translate(0, 6.6, 0);
+      glow.push(strip);
+    }
     hover = true;
     seat = { x: -4, y: 15 };
     thrusters.push([-14, 7.5, 0]);
@@ -617,6 +641,7 @@ function getVehGeo(type) {
     wheels = [[12, -11.5, true], [12, 11.5, true], [-11, -11.5, false], [-11, 11.5, false]];
     wheelScale = 0.95;
     seat = { x: -5, y: 15.5 };
+    plate = [24.3, 6.5];
   } else { // FUSÉE (rocket kart)
     add(body, new THREE.CylinderGeometry(6.5, 7.5, 26, 16), 0, 9.5, 0, 1, 1, 1, 0, 0, Math.PI / 2);    // rocket body
     add(body, new THREE.ConeGeometry(6.5, 14, 16), 20, 9.5, 0, 1, 1, 1, 0, 0, -Math.PI / 2);           // nose cone
@@ -628,22 +653,56 @@ function getVehGeo(type) {
     add(chrome, new THREE.SphereGeometry(1.8, 10, 8), 8, 13.5, 5.2);
     add(chrome, new THREE.ConeGeometry(4.5, 7, 12), -15.5, 9.5, 0, 1, 1, 1, 0, 0, Math.PI / 2);        // nozzle
     add(dark, new THREE.TorusGeometry(5.4, 1.2, 8, 18), -1, 14.4, 0, 1, 1, 1, Math.PI / 2, 0, 0);      // cockpit rim
+    add(chrome, new THREE.TorusGeometry(6.6, 0.9, 8, 18), 13.5, 9.5, 0, 1, 1, 1, 0, Math.PI / 2, 0); // nose ring
     wheels = [[11, -10.5, true], [11, 10.5, true], [-10, -10.5, false], [-10, 10.5, false]];
     wheelScale = 0.9;
     seat = { x: -2, y: 16 };
+    plate = [27.8, 9.5];
   }
 
   const geo = {
     body: mergeGeometries(body),
     dark: dark.length ? mergeGeometries(dark) : null,
     chrome: chrome.length ? mergeGeometries(chrome) : null,
-    wheels, hover, seat, thrusters, wheelScale,
+    glow: glow.length ? mergeGeometries(glow) : null,
+    wheels, hover, seat, thrusters, wheelScale, plate,
   };
   VEH_GEO_CACHE[type] = geo;
   return geo;
 }
 
 const TIRE_GEO = new THREE.TorusGeometry(4.4, 2.8, 12, 20);
+const tireTex = canvasTexture(64, (g) => {
+  g.fillStyle = '#17171d'; g.fillRect(0, 0, 64, 64);
+  g.fillStyle = '#26262e';
+  for (let x = 0; x < 64; x += 8) g.fillRect(x, 0, 4, 64); // tread blocks
+  g.fillStyle = '#0e0e12';
+  g.fillRect(0, 28, 64, 8); // center groove
+}, true);
+tireTex.repeat.set(18, 1);
+const TIRE_MAT = new THREE.MeshStandardMaterial({ map: tireTex, roughness: 0.92 });
+const DISC_GEO = new THREE.CylinderGeometry(2.5, 2.5, 0.8, 14).rotateX(Math.PI / 2);
+const DISC_MAT = new THREE.MeshStandardMaterial({ color: 0xb8b8c2, roughness: 0.25, metalness: 0.9 });
+const CALIPER_GEO = new THREE.BoxGeometry(1.4, 2.6, 1.2);
+const CALIPER_MAT = new THREE.MeshStandardMaterial({ color: 0xd02020, roughness: 0.4 });
+
+// license-style number plate per character
+function makePlateTexture(charIdx) {
+  const c = document.createElement('canvas');
+  c.width = 96; c.height = 64;
+  const g = c.getContext('2d');
+  g.fillStyle = '#f4f4f8';
+  g.beginPath(); g.roundRect(2, 2, 92, 60, 12); g.fill();
+  g.strokeStyle = '#16161e'; g.lineWidth = 4;
+  g.beginPath(); g.roundRect(2, 2, 92, 60, 12); g.stroke();
+  g.fillStyle = '#16161e';
+  g.font = "900 40px 'Arial Rounded MT Bold', system-ui, sans-serif";
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(String(charIdx + 1), 48, 34);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
 const HUB_GEO = (() => {
   const parts = [new THREE.CylinderGeometry(2.9, 2.9, 3.2, 12).rotateX(Math.PI / 2)];
   for (let i = 0; i < 5; i++) {
@@ -695,6 +754,18 @@ function buildKartMesh(charIdx, veh = 0) {
   brim.position.set(vg.seat.x + 2.8, vg.seat.y + 9.2, 0);
   chassis.add(brim);
 
+  if (vg.glow) {
+    chassis.add(new THREE.Mesh(vg.glow, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 1.9, 2.3) })));
+  }
+  if (vg.plate) {
+    const plateMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(5.4, 3.6),
+      new THREE.MeshStandardMaterial({ map: makePlateTexture(charIdx), roughness: 0.5 })
+    );
+    plateMesh.rotation.y = Math.PI / 2;
+    plateMesh.position.set(vg.plate[0], vg.plate[1], 0);
+    chassis.add(plateMesh);
+  }
   const hubMat = new THREE.MeshStandardMaterial({ color: 0xe0c25a, roughness: 0.28, metalness: 0.9, envMapIntensity: 1.2 });
   const wheels = [];
   for (const [wx, wz, front] of vg.wheels) {
@@ -702,11 +773,16 @@ function buildKartMesh(charIdx, veh = 0) {
     steerPivot.position.set(wx, 6.6 * vg.wheelScale, wz);
     steerPivot.scale.setScalar(vg.wheelScale);
     const spin = new THREE.Group();
-    const tyre = new THREE.Mesh(TIRE_GEO, darkMat);
+    const tyre = new THREE.Mesh(TIRE_GEO, TIRE_MAT);
     tyre.castShadow = true;
     const hub = new THREE.Mesh(HUB_GEO, hubMat);
-    spin.add(tyre); spin.add(hub);
+    const disc = new THREE.Mesh(DISC_GEO, DISC_MAT);
+    disc.position.z = wz > 0 ? -1.2 : 1.2;
+    spin.add(tyre); spin.add(hub); spin.add(disc);
+    const caliper = new THREE.Mesh(CALIPER_GEO, CALIPER_MAT);
+    caliper.position.set(1.8, 1.4, wz > 0 ? -1.2 : 1.2);
     steerPivot.add(spin);
+    steerPivot.add(caliper);
     chassis.add(steerPivot);
     wheels.push({ steerPivot, spin, front });
   }
@@ -2102,15 +2178,63 @@ function recordsFor(mapId, ccIdx2) {
   const all = loadRecords();
   return all[`${mapId}-${ccIdx2}`] || [];
 }
-function saveRecord(mapId, ccIdx2, time, name) {
+function saveRecord(mapId, ccIdx2, time, name, extra = {}) {
   const all = loadRecords();
   const key = `${mapId}-${ccIdx2}`;
   const list = all[key] || [];
-  list.push({ t: time, name, d: new Date().toISOString().slice(0, 10) });
+  list.push({ t: time, name, d: new Date().toISOString().slice(0, 10), ...extra });
   list.sort((a, b) => a.t - b.t);
   all[key] = list.slice(0, 5);
   try { localStorage.setItem('iam-records', JSON.stringify(all)); } catch (e) {}
   return all[key].findIndex(r => r.t === time && r.name === name);
+}
+
+/* ---- post-race name entry (manual typing + one-tap past players) ---- */
+function loadPlayers() {
+  try { return JSON.parse(localStorage.getItem('iam-players')) || []; } catch (e) { return []; }
+}
+function rememberPlayer(name) {
+  const list = loadPlayers().filter(n => n !== name);
+  list.unshift(name);
+  try { localStorage.setItem('iam-players', JSON.stringify(list.slice(0, 8))); } catch (e) {}
+}
+let pendingRecord = null, nameAsked = false;
+const nameOverlay = document.getElementById('name-overlay');
+const nameInput = document.getElementById('name-input');
+const nameChips = document.getElementById('name-chips');
+
+function commitRecord(name) {
+  if (!pendingRecord) return;
+  const clean = (name || '').trim().slice(0, 12) || CHARACTERS[player.charIdx].name;
+  newRecordRank = saveRecord(MAPS[mapSel].id, ccSel, pendingRecord.time, clean, {
+    laps: pendingRecord.laps.map(t => Math.round(t * 100) / 100),
+    veh: VEHICLES[vehSel],
+    ch: CHARACTERS[player.charIdx].name,
+  });
+  if (name && name.trim()) rememberPlayer(clean);
+  pendingRecord = null;
+  if (nameOverlay) nameOverlay.hidden = true;
+  beep(880, 0.12, 'square', 1320);
+}
+function showNameOverlay() {
+  if (!nameOverlay) return;
+  nameChips.innerHTML = '';
+  for (const n of loadPlayers()) {
+    const b = document.createElement('button');
+    b.textContent = n;
+    b.addEventListener('click', () => commitRecord(n)); // reconnect in one tap
+    nameChips.appendChild(b);
+  }
+  try { nameInput.value = localStorage.getItem('iam-lastname') || ''; } catch (e) { nameInput.value = ''; }
+  nameOverlay.hidden = false;
+}
+if (nameOverlay) {
+  document.getElementById('name-save').addEventListener('click', () => {
+    try { localStorage.setItem('iam-lastname', nameInput.value.trim()); } catch (e) {}
+    commitRecord(nameInput.value);
+  });
+  document.getElementById('name-skip').addEventListener('click', () => commitRecord(null));
+  nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') commitRecord(nameInput.value); });
 }
 
 /* ---------------- Game state ---------------- */
@@ -2124,6 +2248,7 @@ function makeKart(charIdx, isPlayer, gridPos) {
     coins: 0,
     driftCharge: 0, driftDir: 0,
     offroadT: 0, finishTime: 0, place: gridPos + 1,
+    lapTimes: [], lapStart: 0,
     aiSkill: 0.87 + (gridPos % 7) * 0.017,
     laneSeed: gridPos * 1.7,
     steerVis: 0, wheelSpin: 0,
@@ -2335,7 +2460,14 @@ function updateKart(k, dt) {
   k.y += Math.sin(k.angle) * k.speed * dt;
 
   const ni = nearestIdx(k);
-  if (k.trackIdx > N - 30 && ni < 30) { k.lap++; if (k.isPlayer && k.lap <= LAPS && k.lap > 1) beep(660, 0.15, 'square', 990); }
+  if (k.trackIdx > N - 30 && ni < 30) {
+    k.lap++;
+    if (k.isPlayer && k.lap > 1 && state === 'race') { // completed a lap
+      k.lapTimes.push(raceTime - k.lapStart);
+      k.lapStart = raceTime;
+      if (k.lap <= LAPS) beep(660, 0.15, 'square', 990);
+    }
+  }
   else if (k.trackIdx < 30 && ni > N - 30) k.lap--;
   k.trackIdx = ni;
   k.key = k.lap * N + ni;
@@ -3002,9 +3134,15 @@ function drawFinish() {
     if (k.finishTime) text(fmtTime(k.finishTime), HW / 2 + 130, y, 12, 'right', '#cfe');
   });
   const recs = recordsFor(MAPS[mapSel].id, ccSel);
-  if (recs.length) text(`Record local : ${fmtTime(recs[0].t)} (${recs[0].name})`, HW / 2, HB - 44, 11, 'center', '#ff50dc');
-  const blink = (perfNow / 500 | 0) % 2 === 0;
-  if (blink) text('TOUCHE / ENTRÉE POUR REJOUER', HW / 2, HB - 24, 13, 'center', '#fff');
+  if (recs.length) text(`Record local : ${fmtTime(recs[0].t)} (${recs[0].name})`, HW / 2, HB - 58, 11, 'center', '#ff50dc');
+  if (player.lapTimes.length) {
+    const best = Math.min(...player.lapTimes);
+    text(`Meilleur tour : ${fmtTime(best)}`, HW / 2, HB - 44, 11, 'center', '#9fe');
+  }
+  if (!pendingRecord) {
+    const blink = (perfNow / 500 | 0) % 2 === 0;
+    if (blink) text('TOUCHE / ENTRÉE POUR REJOUER', HW / 2, HB - 24, 13, 'center', '#fff');
+  }
 }
 
 /* ---------------- Resize ---------------- */
@@ -3157,7 +3295,9 @@ function frame(t) {
     if (state === 'race' && player.lap > LAPS) {
       finishDelay = 1.4;
       state = 'finish';
-      newRecordRank = saveRecord(MAPS[mapSel].id, ccSel, player.finishTime, CHARACTERS[player.charIdx].name);
+      pendingRecord = { time: player.finishTime, laps: [...player.lapTimes] };
+      nameAsked = false;
+      newRecordRank = -1;
       spawnConfetti();
       beep(523, 0.15, 'square'); beep(659, 0.15, 'square');
       setTimeout(() => beep(784, 0.3, 'square', 1046), 180);
@@ -3165,7 +3305,10 @@ function frame(t) {
   }
   if (state === 'finish') {
     if (finishDelay > 0) finishDelay -= dt;
-    else if (startPressed) { state = 'cc'; resetRace(menuChar); }
+    else {
+      if (pendingRecord && !nameAsked) { nameAsked = true; showNameOverlay(); }
+      if (startPressed && !pendingRecord) { state = 'cc'; resetRace(menuChar); }
+    }
   }
   if (itemPressed && state === 'race') useItem(player);
 

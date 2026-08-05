@@ -279,6 +279,19 @@ async function maybeAskGyro() {
 }
 updateGyroBtn();
 
+// auto-accelerate (MK-style assist), ON by default
+let autoGas = true;
+try { autoGas = localStorage.getItem('iam-autogas') !== '0'; } catch (e) {}
+const autoBtn = document.getElementById('btnAuto');
+function updateAutoBtn() { if (autoBtn) { autoBtn.textContent = autoGas ? '🚗 AUTO' : '🚗 MANU'; autoBtn.classList.toggle('on', autoGas); } }
+if (autoBtn) autoBtn.addEventListener('click', () => {
+  autoGas = !autoGas;
+  try { localStorage.setItem('iam-autogas', autoGas ? '1' : '0'); } catch (e) {}
+  updateAutoBtn();
+  beep(autoGas ? 660 : 440, 0.08, 'square');
+});
+updateAutoBtn();
+
 function getPlayerSteer() {
   const kb = (input.right ? 1 : 0) - (input.left ? 1 : 0);
   if (kb) return kb;
@@ -835,9 +848,9 @@ const HUB_GEO = (() => {
 const CAP_DOME = new THREE.SphereGeometry(5.1, 18, 10, 0, TAU, 0, Math.PI * 0.52);
 const CAP_BRIM = new THREE.CylinderGeometry(5.0, 5.4, 1.0, 12, 1, false, -0.7, 1.4);
 
-function buildKartMesh(charIdx, veh = 0) {
+function buildKartMesh(charIdx, veh = 0, colorOverride = null) {
   const ch = CHARACTERS[charIdx];
-  const color = new THREE.Color(ch.color);
+  const color = new THREE.Color(colorOverride || ch.color);
   const vg = getVehGeo(veh);
   const g = new THREE.Group();
   const chassis = new THREE.Group();
@@ -958,7 +971,7 @@ function buildKartMesh(charIdx, veh = 0) {
   starHalo.visible = false;
   g.add(starHalo);
   scene.add(g);
-  return { group: g, chassis, wheels, flame, sparks, starHalo, bodyMat, baseColor: color.clone(), veh, hover: vg.hover, thrusterSprites };
+  return { group: g, chassis, wheels, flame, sparks, starHalo, bodyMat, baseColor: color.clone(), veh, colorOv: colorOverride, hover: vg.hover, thrusterSprites };
 }
 
 let kartMeshes = CHARACTERS.map((_, i) => buildKartMesh(i, i === 0 ? vehSel : DEFAULT_VEH[i]));
@@ -967,9 +980,10 @@ let kartMeshes = CHARACTERS.map((_, i) => buildKartMesh(i, i === 0 ? vehSel : DE
 function ensureKartMeshes() {
   for (let i = 0; i < CHARACTERS.length; i++) {
     const want = i === menuChar ? vehSel : DEFAULT_VEH[i];
-    if (kartMeshes[i].veh !== want) {
+    const wantCol = i === menuChar ? COLOR_PALETTE[colorSel] : null;
+    if (kartMeshes[i].veh !== want || kartMeshes[i].colorOv !== wantCol) {
       scene.remove(kartMeshes[i].group);
-      kartMeshes[i] = buildKartMesh(i, want);
+      kartMeshes[i] = buildKartMesh(i, want, wantCol);
     }
   }
 }
@@ -1520,6 +1534,22 @@ function buildTrack(mapIdx) {
     return (noise2(x, z) * 0.65 + noise2(x * 2.3 + 991, z * 2.3) * 0.25 + noise2(x * 5.1, z * 5.1 + 313) * 0.1) * tAmp * 2 * fade;
   };
   track.terrainH = terrainH;
+  // exact ground surface height (same blend as the ground mesh) so karts
+  // never sink under embankments when they leave the road
+  track.groundYAt = (x, z, hint = 0) => {
+    let best = null, bestD = Infinity;
+    for (let o = -12; o <= 12; o++) {
+      const c = cl[(((hint + o * 3) % N) + N) % N];
+      const d = (c.x - x) ** 2 + (c.y - z) ** 2;
+      if (d < bestD) { bestD = d; best = c; }
+    }
+    const dist = Math.sqrt(bestD);
+    const lat = (x - best.x) * best.nx + (z - best.y) * best.ny;
+    const edgeY = roadY(best, clamp(lat, -HALFW, HALFW)) - 2.2;
+    const t = clamp((dist - (HALFW + 40)) / 300, 0, 1);
+    const w = t * t * (3 - 2 * t);
+    return lerp(edgeY, terrainH(x, z), w) - 0.15;
+  };
 
   const grassTex = canvasTexture(512, (g) => {
     g.fillStyle = theme.ground; g.fillRect(0, 0, 512, 512);
@@ -2415,6 +2445,9 @@ let karts = [], player = null, bananas = [], shells = [];
 // title -> cc (étape 1) -> char (étape 2) -> map (étape 3) -> countdown -> race -> finish
 let state = 'title';
 let menuChar = 0, mapSel = 0, ccSel = 1;
+const COLOR_PALETTE = ['#ff4fa3', '#e03434', '#38c8ff', '#6ede3a', '#f0c020', '#9040e0', '#f07818', '#f2f2f2'];
+let colorSel = 0;
+try { colorSel = clamp(parseInt(localStorage.getItem('iam-color') || '0', 10) || 0, 0, COLOR_PALETTE.length - 1); } catch (e) {}
 let ccMul = CC_CLASSES[1].mul;
 let countdownT = 0, raceTime = 0, finishDelay = 0;
 let camAngle = 0;
@@ -2538,7 +2571,7 @@ function updateKart(k, dt) {
 
   if (state === 'race' || (state === 'finish' && !k.isPlayer) || (k.lap > LAPS)) {
     if (k.isPlayer && k.lap <= LAPS && state === 'race') {
-      throttle = input.gas ? 1 : 0;
+      throttle = (input.gas || autoGas) ? 1 : 0;
       if (input.brake) throttle = -1;
       steer = getPlayerSteer();
     } else {
@@ -2740,7 +2773,7 @@ function syncKartMeshes(dt) {
     const c = center[k.trackIdx];
     const lat = lateralOffset(k, c);
     const onRoad = Math.abs(lat) < HALFW + 30;
-    const targetY = onRoad ? roadY(c, lat) : track.terrainH(k.x, k.y);
+    const targetY = onRoad ? roadY(c, lat) : track.groundYAt(k.x, k.y, k.trackIdx) + 0.6;
     if (k.visY === undefined) k.visY = targetY;
     k.visY = lerp(k.visY, targetY, Math.min(1, dt * 10));
     m.group.visible = true;
@@ -2949,7 +2982,7 @@ function updateCamera(dt) {
     camera.lookAt(c.x, c.h + 18, c.y);
     sun.position.set(c.x + 300, 500, c.y + 120);
     sun.target.position.set(c.x, 0, c.y);
-  } else if (state === 'char') {
+  } else if (state === 'char' || state === 'color') {
     // MK-style close-up: slow orbit around the selected kart
     const t = perfNow * 0.0006;
     const py = player.visY || 0;
@@ -2959,11 +2992,13 @@ function updateCamera(dt) {
     sun.target.position.set(player.x, 0, player.y);
   } else if (state === 'map') {
     // circuit preview: fly along the track like the MK course intro
-    const i = Math.floor(perfNow * 0.012) % N;
-    const c = center[i];
-    const ahead = center[(i + 26) % N];
-    camera.position.set(c.x - c.dirx * 40, c.h + 95, c.y - c.diry * 40);
-    camera.lookAt(ahead.x, ahead.h + 12, ahead.y);
+    const f = perfNow * 0.008;
+    const i0 = Math.floor(f) % N, frac = f - Math.floor(f);
+    const c = center[i0], c2 = center[(i0 + 1) % N];
+    const px = lerp(c.x, c2.x, frac), pz = lerp(c.y, c2.y, frac), ph = lerp(c.h, c2.h, frac);
+    const a1 = center[(i0 + 26) % N], a2 = center[(i0 + 27) % N];
+    camera.position.set(px - c.dirx * 40, ph + 95, pz - c.diry * 40);
+    camera.lookAt(lerp(a1.x, a2.x, frac), lerp(a1.h, a2.h, frac) + 12, lerp(a1.y, a2.y, frac));
     sun.position.set(c.x + 300, 500, c.y + 120);
     sun.target.position.set(c.x, 0, c.y);
   } else {
@@ -3101,10 +3136,11 @@ function drawHUD() {
   text('↻', HW - 24, 57, 17, 'center', '#fff');
   hitR(HW - 46, 44, 44, 44, { t: 'restart' });
   hctx.globalAlpha = 0.9;
-  hctx.drawImage(track.miniCanvas, HW - 94, HB - 94);
+  const mmY = HB > HW ? 100 : HB - 94; // portrait: clear of the A button
+  hctx.drawImage(track.miniCanvas, HW - 94, mmY);
   for (const k of karts) {
     hctx.fillStyle = k.isPlayer ? '#fff' : CHARACTERS[k.charIdx].color;
-    const mx = HW - 94 + k.x / 2048 * 84, my = HB - 94 + k.y / 2048 * 84;
+    const mx = HW - 94 + k.x / 2048 * 84, my = mmY + k.y / 2048 * 84;
     hctx.beginPath(); hctx.arc(mx, my, k.isPlayer ? 3 : 2.2, 0, TAU); hctx.fill();
   }
   hctx.globalAlpha = 1;
@@ -3142,7 +3178,7 @@ function drawGoButton(label) {
 }
 
 function stepHeader(step, label) {
-  text(`ÉTAPE ${step}/3`, HW / 2, OY + 14, 11, 'center', '#ff50dc');
+  text(`ÉTAPE ${step}/4`, HW / 2, OY + 14, 11, 'center', '#ff50dc');
   text(label, HW / 2, OY + 28, 22, 'center', '#40e0ff');
   text('‹ retour', 14, OY + 46, 13, 'left', '#cde');
   hitR(0, OY + 36, 96, 36, { t: 'back' });
@@ -3191,11 +3227,37 @@ function drawCharSelect() {
   drawGoButton('CONTINUER ▶');
 }
 
+function drawColorSelect() {
+  stepHeader(3, 'CHOISIS TA COULEUR');
+  const sw = 34, gap = 10;
+  const total = COLOR_PALETTE.length * sw + (COLOR_PALETTE.length - 1) * gap;
+  const x0 = HW / 2 - total / 2;
+  COLOR_PALETTE.forEach((col, i) => {
+    const x = x0 + i * (sw + gap);
+    const y = OY + 210;
+    hitR(x - 5, y - 5, sw + 10, sw + 10, { t: 'col', i });
+    hctx.fillStyle = col;
+    hctx.globalAlpha = i === colorSel ? 1 : 0.6;
+    hctx.beginPath(); hctx.roundRect(x, y, sw, sw, 10); hctx.fill();
+    hctx.globalAlpha = 1;
+    if (i === colorSel) {
+      hctx.strokeStyle = '#fff';
+      hctx.lineWidth = 3.5;
+      hctx.beginPath(); hctx.roundRect(x - 3, y - 3, sw + 6, sw + 6, 12); hctx.stroke();
+    }
+  });
+  text('◀', HW / 2 - 130, OY + 120, 34, 'center', '#fff');
+  text('▶', HW / 2 + 130, OY + 120, 34, 'center', '#fff');
+  hitR(HW / 2 - 180, OY + 90, 100, 100, { t: 'nav', d: -1 });
+  hitR(HW / 2 + 80, OY + 90, 100, 100, { t: 'nav', d: 1 });
+  drawGoButton('CONTINUER ▶');
+}
+
 function drawMapSelect() {
   // the 3D flythrough behind is the live preview — keep the veil light
   hctx.fillStyle = 'rgba(8,5,25,0.25)';
   hctx.fillRect(0, 0, HW, HB);
-  stepHeader(3, 'CHOISIS TON CIRCUIT');
+  stepHeader(4, 'CHOISIS TON CIRCUIT');
   const map = MAPS[mapSel];
   text('◀', HW / 2 - 150, OY + 110, 30, 'center', '#fff');
   text('▶', HW / 2 + 150, OY + 110, 30, 'center', '#fff');
@@ -3319,11 +3381,13 @@ function frame(t) {
     if (a.t === 'back') {
       if (state === 'cc') state = 'title';
       else if (state === 'char') state = 'cc';
-      else if (state === 'map') state = 'char';
+      else if (state === 'color') state = 'char';
+      else if (state === 'map') state = 'color';
       beep(360, 0.08, 'square');
     } else if (a.t === 'nav') {
       const dir = a.d;
       if (state === 'char') { uiQueue.push({ t: 'veh', d: dir }); continue; }
+      if (state === 'color') { uiQueue.push({ t: 'col', d: dir }); continue; }
       else if (state === 'cc') ccSel = (ccSel + CC_CLASSES.length + dir) % CC_CLASSES.length;
       else if (state === 'map') {
         mapSel = (mapSel + MAPS.length + dir) % MAPS.length;
@@ -3333,6 +3397,11 @@ function frame(t) {
       beep(480, 0.06, 'square');
     } else if (a.t === 'go') {
       tapStart = true;
+    } else if (a.t === 'col') {
+      colorSel = a.i !== undefined ? a.i : (colorSel + COLOR_PALETTE.length + a.d) % COLOR_PALETTE.length;
+      try { localStorage.setItem('iam-color', String(colorSel)); } catch (e) {}
+      ensureKartMeshes();
+      beep(480, 0.06, 'square');
     } else if (a.t === 'veh') {
       vehSel = (vehSel + VEHICLES.length + a.d) % VEHICLES.length;
       try { localStorage.setItem('iam-veh', String(vehSel)); } catch (e) {}
@@ -3379,11 +3448,18 @@ function frame(t) {
     if (itemPressed) { state = 'title'; beep(360, 0.08, 'square'); }
     else if (startPressed) { ccMul = CC_CLASSES[ccSel].mul; state = 'char'; beep(560, 0.08, 'square'); }
   } else if (state === 'char') {
-    // étape 2/3 : choix du véhicule (gros plan MK) — un seul paramètre
+    // étape 2/4 : choix du véhicule (gros plan MK) — un seul paramètre
     if (leftPressed) uiQueue.push({ t: 'veh', d: -1 });
     if (rightPressed) uiQueue.push({ t: 'veh', d: 1 });
     if (karts.length === 0) resetRace(menuChar);
     if (itemPressed) { state = 'cc'; beep(360, 0.08, 'square'); }
+    else if (startPressed) { state = 'color'; beep(560, 0.08, 'square'); }
+  } else if (state === 'color') {
+    // étape 3/4 : couleur du véhicule
+    if (leftPressed) uiQueue.push({ t: 'col', d: -1 });
+    if (rightPressed) uiQueue.push({ t: 'col', d: 1 });
+    if (karts.length === 0) resetRace(menuChar);
+    if (itemPressed) { state = 'char'; beep(360, 0.08, 'square'); }
     else if (startPressed) { state = 'map'; beep(560, 0.08, 'square'); }
   } else if (state === 'map') {
     // étape 3/3 : circuit (survol 3D en direct + vignettes)
@@ -3395,7 +3471,7 @@ function frame(t) {
       resetRace(menuChar);
       beep(480, 0.06, 'square');
     }
-    if (itemPressed) { state = 'char'; beep(360, 0.08, 'square'); }
+    if (itemPressed) { state = 'color'; beep(360, 0.08, 'square'); }
     else if (startPressed) {
       resetRace(menuChar);
       state = 'countdown';
@@ -3452,6 +3528,7 @@ function frame(t) {
   if (state === 'title') drawTitle();
   else if (state === 'cc') drawCcSelect();
   else if (state === 'char') drawCharSelect();
+  else if (state === 'color') drawColorSelect();
   else if (state === 'map') drawMapSelect();
   else {
     drawHUD();
@@ -3495,8 +3572,11 @@ window.IAM = {
   get ccSel() { return ccSel; },
   CHARACTERS, MAPS,
   records: loadRecords,
-  get hud() { return { HW, HB, OY }; },
+  get hud() { return { HW, HB, OY, S: hud.width / HW }; },
   get vehSel() { return vehSel; },
+  get colorSel() { return colorSel; },
+  get track() { return track; },
+  get kartMeshes() { return kartMeshes; },
   setVeh(v) { uiQueue.push({ t: 'veh', d: v - vehSel }); },
   makePlayerAI() { if (player) player.isPlayer = false; },
   start(mapIdx = 0, ccIdx = 2, charIdx = 0) {

@@ -2,6 +2,15 @@
 
 Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker (`sw.js`) : chaque bump déclenche la mise à jour automatique de tous les clients installés.
 
+## v20 — Couleur du véhicule, accélérateur auto, portrait plein écran
+
+- **Nouvelle étape 3/4 « Choisis ta couleur »** après le choix du véhicule : 8 teintes (rose, rouge, bleu, vert, jaune, violet, orange, blanc), navigables aux flèches ou d'un tap sur les pastilles, mémorisées (`iam-color`). Le véhicule du joueur est repeint en direct dans le garage et en course.
+- **Accélérateur automatique par défaut** : le kart accélère tout seul (comme l'assistance MK8) — on se concentre sur la direction. Nouveau bouton 🚗 **AUTO/MANU** en haut de l'écran pour repasser en mode manuel (bouton A), choix mémorisé.
+- **Mode portrait vraiment plein écran** : la scène occupe désormais toute la hauteur du téléphone (plus de bandes noires) — le conteneur `#stage` est épinglé au viewport.
+- **Fini le kart enterré hors piste** : le sol visible est un mélange progressif entre le bord de route et le terrain brut ; le kart utilisait le terrain brut et passait sous le décor (visible à New York). Nouvelle fonction `groundYAt(x, z)` qui reproduit exactement la formule du mesh du sol — le kart roule maintenant *sur* ce qu'on voit.
+- **Survol des circuits fluide** : la caméra de présentation interpole entre les échantillons du tracé au lieu de sauter d'un point à l'autre (fini les saccades).
+- **Minimap déplacée en portrait** : en haut à droite, elle ne chevauche plus le bouton A.
+
 ## v19 — Avatars Inès · Alice · Marlon + gyro par défaut
 
 - **Portraits personnalisés des trois pilotes**, inspirés de la photo de famille mais dessinés en code (aucune photo publiée — le site est public) : **Marlon** cheveux courts châtains ébouriffés + lunettes de soleil miroir bleues + grand sourire ; **Inès** cheveux mi-longs ondulés avec raie au milieu, yeux noisette ; **Alice** longs cheveux raides + **lunettes hexagonales dorées** + taches de rousseur. Vrais cheveux 3D à la place des casquettes pour les trois.

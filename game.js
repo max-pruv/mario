@@ -2203,9 +2203,37 @@ const nameOverlay = document.getElementById('name-overlay');
 const nameInput = document.getElementById('name-input');
 const nameChips = document.getElementById('name-chips');
 
+// every name we've ever seen (recent players + names in saved records)
+const normName = (n) => n.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+function allKnownNames() {
+  const seen = new Map();
+  for (const n of loadPlayers()) seen.set(normName(n), n);
+  const all = loadRecords();
+  for (const key of Object.keys(all))
+    for (const r of all[key])
+      if (r.name && !seen.has(normName(r.name))) seen.set(normName(r.name), r.name);
+  return [...seen.values()];
+}
+
+// live suggestions while typing -> tap = save under that exact name
+function renderChips(filter = '') {
+  nameChips.innerHTML = '';
+  const f = normName(filter);
+  const names = allKnownNames().filter(n => !f || normName(n).startsWith(f)).slice(0, 8);
+  for (const n of names) {
+    const b = document.createElement('button');
+    b.textContent = n;
+    b.addEventListener('click', () => commitRecord(n));
+    nameChips.appendChild(b);
+  }
+}
+
 function commitRecord(name) {
   if (!pendingRecord) return;
-  const clean = (name || '').trim().slice(0, 12) || CHARACTERS[player.charIdx].name;
+  let clean = (name || '').trim().slice(0, 12) || CHARACTERS[player.charIdx].name;
+  // merge with an existing name that only differs by case/accents — no duplicates
+  const existing = allKnownNames().find(n => normName(n) === normName(clean));
+  if (existing) clean = existing;
   newRecordRank = saveRecord(MAPS[mapSel].id, ccSel, pendingRecord.time, clean, {
     laps: pendingRecord.laps.map(t => Math.round(t * 100) / 100),
     veh: VEHICLES[vehSel],
@@ -2218,14 +2246,8 @@ function commitRecord(name) {
 }
 function showNameOverlay() {
   if (!nameOverlay) return;
-  nameChips.innerHTML = '';
-  for (const n of loadPlayers()) {
-    const b = document.createElement('button');
-    b.textContent = n;
-    b.addEventListener('click', () => commitRecord(n)); // reconnect in one tap
-    nameChips.appendChild(b);
-  }
   try { nameInput.value = localStorage.getItem('iam-lastname') || ''; } catch (e) { nameInput.value = ''; }
+  renderChips(nameInput.value);
   nameOverlay.hidden = false;
 }
 if (nameOverlay) {
@@ -2235,6 +2257,7 @@ if (nameOverlay) {
   });
   document.getElementById('name-skip').addEventListener('click', () => commitRecord(null));
   nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') commitRecord(nameInput.value); });
+  nameInput.addEventListener('input', () => renderChips(nameInput.value)); // autocomplete
 }
 
 /* ---------------- Game state ---------------- */

@@ -814,8 +814,8 @@ function makeFaceTexture(charIdx = -1) {
 }
 
 // ---------------- Vehicle garage: 6 truly different shapes ----------------
-const VEHICLES = ['KART', 'FORMULE', 'POD RACER', 'SPEEDER', 'BRIQUE', 'FUSÉE'];
-const DEFAULT_VEH = [0, 1, 4, 0, 5, 2, 3, 1]; // what each AI character drives
+const VEHICLES = ['KART', 'FORMULE', 'POD RACER', 'SPEEDER', 'BRIQUE', 'FUSÉE', 'MODEL Y'];
+const DEFAULT_VEH = [0, 1, 4, 6, 5, 2, 3, 1]; // what each AI character drives
 let vehSel = 0;
 try { vehSel = clamp(parseInt(localStorage.getItem('iam-veh') || '0', 10) || 0, 0, VEHICLES.length - 1); } catch (e) {}
 
@@ -833,7 +833,7 @@ function getVehGeo(type) {
   };
   let wheels = [], hover = false, seat = { x: -3, y: 14 }, thrusters = [], wheelScale = 1;
   let plate = null;
-  const glow = [];
+  const glow = [], glowRed = [], glass = [];
 
   if (type === 0) { // KART classique
     add(body, new THREE.SphereGeometry(10, 24, 16), 2, 7.8, 0, 1.75, 0.66, 1.06);
@@ -940,6 +940,57 @@ function getVehGeo(type) {
     wheelScale = 0.95;
     seat = { x: -5, y: 15.5 };
     plate = [24.3, 6.5];
+  } else if (type === 6) { // MODEL Y (SUV électrique) — real side profile, beveled extrusion
+    const bodyShape = new THREE.Shape();
+    bodyShape.moveTo(-19.5, 3.6);
+    bodyShape.quadraticCurveTo(-21.8, 4.0, -21.9, 6.4);    // rear bumper
+    bodyShape.quadraticCurveTo(-21.9, 9.6, -20.6, 11.2);   // liftgate
+    bodyShape.quadraticCurveTo(-19.0, 13.2, -15.5, 13.6);  // rear shoulder
+    bodyShape.lineTo(8.5, 13.4);                           // beltline
+    bodyShape.quadraticCurveTo(14.5, 12.6, 18.5, 11.2);    // hood
+    bodyShape.quadraticCurveTo(21.9, 9.8, 21.9, 7.2);      // nose
+    bodyShape.quadraticCurveTo(21.9, 4.4, 19.5, 3.6);      // front bumper
+    bodyShape.lineTo(-19.5, 3.6);
+    const bodyGeo = new THREE.ExtrudeGeometry(bodyShape, {
+      depth: 15.4, bevelEnabled: true, bevelThickness: 2.0, bevelSize: 1.7, bevelSegments: 4, curveSegments: 10,
+    });
+    bodyGeo.translate(0, 0, -7.7);
+    body.push(bodyGeo);
+    const glassShape = new THREE.Shape();                  // windshield -> pano roof -> rear glass, one piece
+    glassShape.moveTo(11.2, 13.1);
+    glassShape.quadraticCurveTo(6.5, 19.0, 0.5, 20.0);
+    glassShape.quadraticCurveTo(-6.5, 20.4, -11.5, 18.6);
+    glassShape.quadraticCurveTo(-16.0, 16.8, -18.2, 13.1);
+    glassShape.lineTo(11.2, 13.1);
+    const glassGeo = new THREE.ExtrudeGeometry(glassShape, {
+      depth: 12.6, bevelEnabled: true, bevelThickness: 1.6, bevelSize: 1.4, bevelSegments: 3, curveSegments: 10,
+    });
+    glassGeo.translate(0, 0, -6.3);
+    glass.push(glassGeo);
+    add(dark, new THREE.BoxGeometry(37, 2.0, 19.0), 0, 3.2, 0);       // lower cladding
+    add(dark, new THREE.BoxGeometry(3.5, 2.6, 16), -20.3, 4.6, 0);    // diffuser
+    add(dark, new THREE.BoxGeometry(3.5, 2.2, 16), 20.3, 4.4, 0);     // front splitter
+    for (const [ax, az] of [[13.5, -9.9], [13.5, 9.9], [-13.5, -9.9], [-13.5, 9.9]])
+      add(dark, new THREE.TorusGeometry(7.6, 1.0, 8, 16, Math.PI), ax, 6.6, az); // arch flares
+    // extrusions are non-indexed — mirrors must match to merge into the body
+    add(body, new THREE.BoxGeometry(2.2, 1.6, 3.2).toNonIndexed(), 8.6, 14.2, -10.2);
+    add(body, new THREE.BoxGeometry(2.2, 1.6, 3.2).toNonIndexed(), 8.6, 14.2, 10.2);
+    for (const hx of [3.5, -7.5]) for (const hz of [-9.8, 9.8])
+      add(chrome, new THREE.BoxGeometry(3.0, 0.7, 0.4), hx, 11.6, hz); // flush handles
+    for (const sz of [-1, 1]) {                                        // slim LED headlights
+      const led = new THREE.BoxGeometry(1.3, 0.9, 5.6);
+      led.translate(22.5, 10.4, sz * 5.6);
+      glow.push(led);
+    }
+    {                                                                  // full-width light bar
+      const bar = new THREE.BoxGeometry(0.9, 0.9, 16.5);
+      bar.translate(-22.5, 11.2, 0);
+      glowRed.push(bar);
+    }
+    wheels = [[13.5, -9.6, true], [13.5, 9.6, true], [-13.5, -9.6, false], [-13.5, 9.6, false]];
+    wheelScale = 1.05;
+    seat = { x: -1, y: 6.5 };
+    plate = [23.8, 7.4];
   } else { // FUSÉE (rocket kart)
     add(body, new THREE.CylinderGeometry(6.5, 7.5, 26, 16), 0, 9.5, 0, 1, 1, 1, 0, 0, Math.PI / 2);    // rocket body
     add(body, new THREE.ConeGeometry(6.5, 14, 16), 20, 9.5, 0, 1, 1, 1, 0, 0, -Math.PI / 2);           // nose cone
@@ -963,6 +1014,8 @@ function getVehGeo(type) {
     dark: dark.length ? mergeGeometries(dark) : null,
     chrome: chrome.length ? mergeGeometries(chrome) : null,
     glow: glow.length ? mergeGeometries(glow) : null,
+    glowRed: glowRed.length ? mergeGeometries(glowRed) : null,
+    glass: glass.length ? mergeGeometries(glass) : null,
     wheels, hover, seat, thrusters, wheelScale, plate,
   };
   VEH_GEO_CACHE[type] = geo;
@@ -1068,6 +1121,18 @@ function buildKartMesh(charIdx, veh = 0, colorOverride = null) {
 
   if (vg.glow) {
     chassis.add(new THREE.Mesh(vg.glow, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 1.9, 2.3) })));
+  }
+  if (vg.glowRed) {
+    chassis.add(new THREE.Mesh(vg.glowRed, new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 0.25, 0.2) })));
+  }
+  if (vg.glass) {
+    const glassMesh = new THREE.Mesh(vg.glass, new THREE.MeshPhysicalMaterial({
+      color: 0x121a26, roughness: 0.06, metalness: 0.25,
+      transparent: true, opacity: 0.55, depthWrite: false,
+      clearcoat: 1.0, clearcoatRoughness: 0.05, envMapIntensity: 1.8,
+    }));
+    glassMesh.castShadow = true;
+    chassis.add(glassMesh);
   }
   if (vg.plate) {
     const plateMesh = new THREE.Mesh(

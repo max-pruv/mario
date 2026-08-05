@@ -16,6 +16,23 @@ Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker
 - Le micro se coupe proprement à la fin de la partie ou si la connexion tombe.
 - Testé de bout en bout : deux navigateurs à micros simulés, flux vocal reçu dans les deux sens, on/off propre — 7/7.
 
+## v27 — Révolution graphique
+
+- **Model Y entièrement resculptée** : carrosserie **loftée par 14 sections transversales** (vraies courbures automobiles : capot bombé, ceinture de caisse, pincement de pavillon, hayon fastback) au lieu d'une extrusion plate. **Texture de carrosserie 1024** : vitrages teintés avec montants A/B/C, lignes de portes, poignées affleurantes, ombres de passages de roues, bas de caisse satin, reflet de ciel sur les épaules. Plancher plat d'EV, becquet avant, entrée d'air, DRLs LED, bandeau arrière.
+- **Route crédible** : texture 1024 — granulat deux tons, **traces de gomme ondulantes dans la trajectoire**, plaques de réasphaltage, fissures rebouchées, taches d'huile, billes de gomme au bord, lignes blanches écaillées, relief micro-bosselé.
+- **Bords de piste vivants** : ~1500 **touffes d'herbe 3D instanciées** (lames dessinées, teintes variées) qui épousent le terrain le long du circuit.
+- **Ciel vivant** : nuages volumétriques dérivants + vrai disque solaire lumineux (lune en nocturne).
+- **Particules** : poussière ocre hors-piste, fumée blanche de drift, échappement orange en boost — derrière chaque kart.
+- **Ombres de contact** : disque d'ombre douce sous chaque véhicule, collé à la route même dans les virages relevés — les karts « tiennent » au sol.
+
+## v26 — Lobby jusqu'à 8 joueurs
+
+- **Une partie, jusqu'à 8 joueurs** : l'hôte crée le code, chacun rejoint, l'écran hôte liste les joueurs en direct (« Joueur 2 ✓ prêt… ») et un gros bouton **« ON EST AU COMPLET (N joueurs) ▶ »** verrouille la partie et lance les choix.
+- **Topologie en étoile** : chaque invité ne parle qu'à l'hôte qui relaie positions (15 Hz), objets et arrivées aux autres — aucun serveur, toujours du pair-à-pair.
+- Sièges attribués au départ (conflits de pilotes résolus), **badges numérotés** sur la minimap, mini-classement et écran d'arrivée pour N joueurs.
+- Vocal en étoile : tous parlent avec l'hôte.
+- Déconnexion par siège : 15 s de reconnexion, sinon l'IA reprend ce volant sans arrêter la course ; « Partie pleine » au 9ᵉ.
+
 ## v25 — Menus : plus d'overlap, vraie pleine hauteur
 
 - Les titres des menus démarrent désormais **sous** la rangée de boutons (GYRO/son/AUTO) grâce à la même sonde safe-area que le HUD de course — fini « CHOISIS TON VÉHICULE » caché derrière les boutons.

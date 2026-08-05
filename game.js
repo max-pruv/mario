@@ -477,37 +477,67 @@ const glowOrange = radialSprite('rgba(255,160,60,0.9)');
 const glowLime = radialSprite('rgba(150,255,80,0.9)');
 const glowWhite = radialSprite('rgba(255,255,255,0.8)');
 
-const roadTex = canvasTexture(512, (g) => {
-  g.fillStyle = '#4a4a54'; g.fillRect(0, 0, 512, 512);
-  // fine aggregate
-  for (let i = 0; i < 5200; i++) {
-    g.fillStyle = i % 2 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.13)';
-    g.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
+const roadTex = canvasTexture(1024, (g) => {
+  g.fillStyle = '#47474f'; g.fillRect(0, 0, 1024, 1024);
+  // fine aggregate, two tones
+  for (let i = 0; i < 15000; i++) {
+    g.fillStyle = i % 3 ? 'rgba(0,0,0,0.14)' : 'rgba(255,255,255,0.06)';
+    g.fillRect(Math.random() * 1024, Math.random() * 1024, 2, 2);
   }
-  // tire wear lanes (darker where the karts roll)
-  for (const cx of [150, 362]) {
-    const wear = g.createLinearGradient(cx - 42, 0, cx + 42, 0);
-    wear.addColorStop(0, 'rgba(0,0,0,0)');
-    wear.addColorStop(0.5, 'rgba(0,0,0,0.16)');
-    wear.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = wear;
-    g.fillRect(cx - 42, 0, 84, 512);
+  // large subtle tone patches (repaved sections)
+  for (let i = 0; i < 6; i++) {
+    g.fillStyle = i % 2 ? 'rgba(20,20,28,0.10)' : 'rgba(200,200,215,0.05)';
+    const w = 180 + Math.random() * 300, h = 120 + Math.random() * 240;
+    g.beginPath(); g.roundRect(Math.random() * 1024, Math.random() * 1024, w, h, 30); g.fill();
   }
-  // faint cracks
-  g.strokeStyle = 'rgba(0,0,0,0.14)'; g.lineWidth = 1.5;
-  for (let i = 0; i < 7; i++) {
+  // rubbered-in racing lines, gently weaving
+  for (const cx of [300, 724]) {
+    for (let y = 0; y < 1024; y += 16) {
+      const wob = Math.sin(y * 0.012 + cx) * 26;
+      const wear = g.createLinearGradient(cx + wob - 60, 0, cx + wob + 60, 0);
+      wear.addColorStop(0, 'rgba(0,0,0,0)');
+      wear.addColorStop(0.5, 'rgba(10,10,14,0.22)');
+      wear.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = wear;
+      g.fillRect(cx + wob - 60, y, 120, 16);
+    }
+  }
+  // oil sheens
+  for (let i = 0; i < 9; i++) {
+    g.fillStyle = 'rgba(18,22,40,0.14)';
     g.beginPath();
-    let x = Math.random() * 512, y = Math.random() * 512;
+    g.ellipse(Math.random() * 1024, Math.random() * 1024, 14 + Math.random() * 30, 6 + Math.random() * 14, Math.random() * 3, 0, TAU);
+    g.fill();
+  }
+  // sealed cracks
+  g.strokeStyle = 'rgba(0,0,0,0.2)'; g.lineWidth = 2.5;
+  for (let i = 0; i < 12; i++) {
+    g.beginPath();
+    let x = Math.random() * 1024, y = Math.random() * 1024;
     g.moveTo(x, y);
-    for (let j = 0; j < 5; j++) { x += (Math.random() - 0.5) * 60; y += 18 + Math.random() * 26; g.lineTo(x, y); }
+    for (let j = 0; j < 6; j++) { x += (Math.random() - 0.5) * 110; y += 30 + Math.random() * 50; g.lineTo(x, y); }
     g.stroke();
   }
+  // rubber marbles collecting off-line near the edges
+  for (let i = 0; i < 700; i++) {
+    const side = Math.random() < 0.5 ? 40 + Math.random() * 60 : 924 + Math.random() * 60;
+    g.fillStyle = 'rgba(8,8,10,0.35)';
+    g.fillRect(side, Math.random() * 1024, 3, 3);
+  }
+  // worn white edge lines
   g.fillStyle = '#e8e8ea';
-  g.fillRect(12, 0, 12, 512);
-  g.fillRect(488, 0, 12, 512);
-  g.fillStyle = '#ffd24a';
-  g.fillRect(249, 20, 14, 200);
-  g.fillRect(249, 292, 14, 200);
+  g.fillRect(24, 0, 22, 1024);
+  g.fillRect(978, 0, 22, 1024);
+  g.fillStyle = 'rgba(71,71,79,0.6)';
+  for (let i = 0; i < 26; i++) { // chipped paint
+    const y = Math.random() * 1024;
+    g.fillRect(24, y, 22, 6 + Math.random() * 14);
+    g.fillRect(978, y, 22, 6 + Math.random() * 14);
+  }
+  // dashed yellow centre line, slightly faded
+  g.fillStyle = 'rgba(255,210,74,0.9)';
+  g.fillRect(498, 40, 26, 400);
+  g.fillRect(498, 584, 26, 400);
 }, true);
 
 const curbTex = canvasTexture(64, (g) => {
@@ -854,7 +884,7 @@ function getVehGeo(type) {
     arr.push(geo);
   };
   let wheels = [], hover = false, seat = { x: -3, y: 14 }, thrusters = [], wheelScale = 1;
-  let plate = null;
+  let plate = null, bodyMap = null;
   const glow = [], glowRed = [], glass = [];
 
   if (type === 0) { // KART classique
@@ -962,57 +992,153 @@ function getVehGeo(type) {
     wheelScale = 0.95;
     seat = { x: -5, y: 15.5 };
     plate = [24.3, 6.5];
-  } else if (type === 6) { // MODEL Y (SUV électrique) — real side profile, beveled extrusion
-    const bodyShape = new THREE.Shape();
-    bodyShape.moveTo(-19.5, 3.6);
-    bodyShape.quadraticCurveTo(-21.8, 4.0, -21.9, 6.4);    // rear bumper
-    bodyShape.quadraticCurveTo(-21.9, 9.6, -20.6, 11.2);   // liftgate
-    bodyShape.quadraticCurveTo(-19.0, 13.2, -15.5, 13.6);  // rear shoulder
-    bodyShape.lineTo(8.5, 13.4);                           // beltline
-    bodyShape.quadraticCurveTo(14.5, 12.6, 18.5, 11.2);    // hood
-    bodyShape.quadraticCurveTo(21.9, 9.8, 21.9, 7.2);      // nose
-    bodyShape.quadraticCurveTo(21.9, 4.4, 19.5, 3.6);      // front bumper
-    bodyShape.lineTo(-19.5, 3.6);
-    const bodyGeo = new THREE.ExtrudeGeometry(bodyShape, {
-      depth: 15.4, bevelEnabled: true, bevelThickness: 2.0, bevelSize: 1.7, bevelSegments: 4, curveSegments: 10,
+  } else if (type === 6) { // MODEL Y — lofted cross-sections, real automotive curvature
+    // stations: [x, yBottom, yBelt, yTop, halfWidth, glassPinch]
+    const ST = [
+      [22.6, 3.8, 7.4, 8.6, 7.6, 0],
+      [21.6, 3.3, 8.6, 10.0, 8.6, 0],
+      [19.5, 3.2, 9.6, 11.0, 9.2, 0],
+      [16.5, 3.2, 10.4, 11.9, 9.6, 0],
+      [12.5, 3.2, 11.0, 12.6, 9.75, 0],
+      [9.5, 3.2, 11.3, 13.3, 9.75, 0.35],
+      [6.0, 3.2, 11.4, 16.2, 9.6, 0.8],
+      [2.0, 3.2, 11.4, 19.0, 9.4, 1],
+      [-3.0, 3.2, 11.4, 19.7, 9.3, 1],
+      [-8.0, 3.2, 11.4, 19.2, 9.2, 1],
+      [-13.0, 3.2, 11.5, 17.4, 9.4, 1],
+      [-16.5, 3.3, 11.8, 14.9, 9.5, 0.5],
+      [-19.5, 3.5, 11.2, 13.0, 9.1, 0],
+      [-22.3, 3.8, 8.8, 11.7, 7.8, 0],
+    ];
+    const half = (st) => { // bottom -> widest -> belt crease -> tumblehome -> roof center
+      const [, yB, yBelt, yTop, zM, gl] = st;
+      return [
+        [yB, 0],
+        [yB, zM * 0.55],
+        [yB + 0.4, zM * 0.9],
+        [(yB + yBelt) / 2, zM],
+        [yBelt - 0.6, zM * 0.995],
+        [yBelt, zM * 0.955],
+        [yBelt + (yTop - yBelt) * 0.45, zM * (0.82 - gl * 0.09)],
+        [yTop - (yTop - yBelt) * 0.18, zM * (0.62 - gl * 0.17)],
+        [yTop - 0.22, zM * 0.30],
+        [yTop, 0],
+      ];
+    };
+    const S = ST.length, HP = 10, RING = HP * 2 - 2; // closed loop per station
+    const pos = [], uv = [], idx = [];
+    ST.forEach((st, si) => {
+      const h = half(st), x = st[0];
+      const loop = [];
+      for (let i = 0; i < HP; i++) loop.push([h[i][0], h[i][1]]);          // z+ side up
+      for (let i = HP - 2; i >= 1; i--) loop.push([h[i][0], -h[i][1]]);    // z- side down
+      loop.forEach(([y, z], pi) => {
+        pos.push(x, y, z);
+        uv.push(si / (S - 1), pi / (RING - 1));
+      });
     });
-    bodyGeo.translate(0, 0, -7.7);
-    body.push(bodyGeo);
-    const glassShape = new THREE.Shape();                  // windshield -> pano roof -> rear glass, one piece
-    glassShape.moveTo(11.2, 13.1);
-    glassShape.quadraticCurveTo(6.5, 19.0, 0.5, 20.0);
-    glassShape.quadraticCurveTo(-6.5, 20.4, -11.5, 18.6);
-    glassShape.quadraticCurveTo(-16.0, 16.8, -18.2, 13.1);
-    glassShape.lineTo(11.2, 13.1);
-    const glassGeo = new THREE.ExtrudeGeometry(glassShape, {
-      depth: 12.6, bevelEnabled: true, bevelThickness: 1.6, bevelSize: 1.4, bevelSegments: 3, curveSegments: 10,
-    });
-    glassGeo.translate(0, 0, -6.3);
-    glass.push(glassGeo);
-    add(dark, new THREE.BoxGeometry(37, 2.0, 19.0), 0, 3.2, 0);       // lower cladding
-    add(dark, new THREE.BoxGeometry(3.5, 2.6, 16), -20.3, 4.6, 0);    // diffuser
-    add(dark, new THREE.BoxGeometry(3.5, 2.2, 16), 20.3, 4.4, 0);     // front splitter
-    for (const [ax, az] of [[13.5, -9.9], [13.5, 9.9], [-13.5, -9.9], [-13.5, 9.9]])
-      add(dark, new THREE.TorusGeometry(7.6, 1.0, 8, 16, Math.PI), ax, 6.6, az); // arch flares
-    // extrusions are non-indexed — mirrors must match to merge into the body
-    add(body, new THREE.BoxGeometry(2.2, 1.6, 3.2).toNonIndexed(), 8.6, 14.2, -10.2);
-    add(body, new THREE.BoxGeometry(2.2, 1.6, 3.2).toNonIndexed(), 8.6, 14.2, 10.2);
-    for (const hx of [3.5, -7.5]) for (const hz of [-9.8, 9.8])
-      add(chrome, new THREE.BoxGeometry(3.0, 0.7, 0.4), hx, 11.6, hz); // flush handles
-    for (const sz of [-1, 1]) {                                        // slim LED headlights
-      const led = new THREE.BoxGeometry(1.3, 0.9, 5.6);
-      led.translate(22.5, 10.4, sz * 5.6);
+    for (let si = 0; si < S - 1; si++) {
+      for (let pi = 0; pi < RING; pi++) {
+        const a = si * RING + pi, b2 = si * RING + (pi + 1) % RING;
+        const c2 = (si + 1) * RING + pi, d2 = (si + 1) * RING + (pi + 1) % RING;
+        idx.push(a, b2, c2, b2, d2, c2);
+      }
+    }
+    // nose + tail caps
+    const capF = pos.length / 3;
+    pos.push(ST[0][0] + 0.01, (ST[0][1] + ST[0][3]) / 2, 0); uv.push(0, 0.5);
+    for (let pi = 0; pi < RING; pi++) idx.push(capF, (pi + 1) % RING, pi);
+    const capR = pos.length / 3;
+    pos.push(ST[S - 1][0] - 0.01, (ST[S - 1][1] + ST[S - 1][3]) / 2, 0); uv.push(1, 0.5);
+    const base = (S - 1) * RING;
+    for (let pi = 0; pi < RING; pi++) idx.push(capR, base + pi, base + (pi + 1) % RING);
+    const loft = new THREE.BufferGeometry();
+    loft.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    loft.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    loft.setIndex(idx);
+    loft.computeVertexNormals();
+    body.push(loft);
+
+    // body texture: white paint (tinted by material color), painted glass,
+    // pillars, panel seams, handles, arch shadows, rockers
+    {
+      const c = document.createElement('canvas');
+      c.width = 1024; c.height = 256;
+      const g = c.getContext('2d');
+      g.fillStyle = '#ffffff'; g.fillRect(0, 0, 1024, 256);
+      const U = (x) => x * 1024, V = (v) => v * 256;
+      const vGlassLo = 6.4 / (RING - 1), vGlassHi = 8.6 / (RING - 1);
+      const mirror = (v) => 1 - v;
+      const glassZones = [[0.40, 0.435], [0.455, 0.575], [0.595, 0.70], [0.715, 0.80]]; // between pillars
+      const paintGlass = (v0, v1) => {
+        for (const [u0, u1] of glassZones) {
+          const gr = g.createLinearGradient(0, V(v0), 0, V(v1));
+          gr.addColorStop(0, '#2c3a4e'); gr.addColorStop(0.5, '#1a2433'); gr.addColorStop(1, '#101822');
+          g.fillStyle = gr;
+          g.beginPath(); g.roundRect(U(u0), V(Math.min(v0, v1)), U(u1 - u0), Math.abs(V(v1) - V(v0)), 6); g.fill();
+        }
+      };
+      paintGlass(vGlassLo, vGlassHi);
+      paintGlass(mirror(vGlassHi), mirror(vGlassLo));
+      // windshield + rear window bands across the roof centre
+      g.fillStyle = '#1c2836';
+      g.fillRect(U(0.40), V(vGlassHi), U(0.075), V(mirror(vGlassHi)) - V(vGlassHi));
+      g.fillRect(U(0.755), V(vGlassHi), U(0.05), V(mirror(vGlassHi)) - V(vGlassHi));
+      // panel seams (doors, frunk, liftgate)
+      g.strokeStyle = 'rgba(40,45,55,0.5)'; g.lineWidth = 2;
+      for (const u of [0.30, 0.47, 0.60, 0.86]) {
+        g.beginPath(); g.moveTo(U(u), V(0.06)); g.lineTo(U(u), V(0.42)); g.stroke();
+        g.beginPath(); g.moveTo(U(u), V(0.58)); g.lineTo(U(u), V(0.94)); g.stroke();
+      }
+      // flush door handles
+      g.fillStyle = 'rgba(45,50,60,0.75)';
+      for (const u of [0.44, 0.585]) {
+        g.fillRect(U(u), V(0.325), 26, 5);
+        g.fillRect(U(u), 256 - V(0.325) - 5, 26, 5);
+      }
+      // wheel arches: soft dark shadow low on the flanks
+      g.fillStyle = 'rgba(15,17,22,0.85)';
+      for (const u of [0.203, 0.804]) {
+        for (const vc of [0.10, 0.90]) {
+          g.beginPath(); g.ellipse(U(u), V(vc), 68, 26, 0, 0, TAU); g.fill();
+        }
+      }
+      // rocker panels + lower bumpers in satin black
+      g.fillStyle = 'rgba(18,20,25,0.9)';
+      g.fillRect(0, 0, 1024, V(0.055)); g.fillRect(0, 256 - V(0.055), 1024, V(0.055));
+      g.fillRect(0, V(0.055), U(0.045), V(0.10)); g.fillRect(0, 256 - V(0.155), U(0.045), V(0.10));
+      g.fillRect(U(0.955), V(0.055), U(0.045), V(0.10)); g.fillRect(U(0.955), 256 - V(0.155), U(0.045), V(0.10));
+      // subtle sky reflection sweep on the shoulders
+      const rf = g.createLinearGradient(0, V(0.30), 0, V(0.42));
+      rf.addColorStop(0, 'rgba(255,255,255,0)'); rf.addColorStop(1, 'rgba(210,225,245,0.18)');
+      g.fillStyle = rf; g.fillRect(0, V(0.30), 1024, V(0.12));
+      bodyMap = new THREE.CanvasTexture(c);
+      bodyMap.colorSpace = THREE.SRGBColorSpace;
+      bodyMap.anisotropy = 4;
+    }
+
+    add(dark, new THREE.BoxGeometry(38, 1.8, 18.4), 0, 3.0, 0);        // flat EV floor
+    add(dark, new THREE.BoxGeometry(3.4, 2.4, 15), -21.0, 4.6, 0);     // diffuser
+    add(dark, new THREE.BoxGeometry(2.6, 2.0, 14), 21.4, 4.3, 0);      // front lip
+    add(dark, new THREE.BoxGeometry(4.2, 2.8, 10.5), 21.2, 6.4, 0);    // lower intake
+    for (const [ax, az] of [[13.5, -9.7], [13.5, 9.7], [-13.5, -9.7], [-13.5, 9.7]])
+      add(dark, new THREE.TorusGeometry(7.7, 1.05, 8, 18, Math.PI), ax, 6.6, az); // arch trim
+    add(dark, new THREE.BoxGeometry(2.0, 1.5, 3.0), 8.8, 13.6, -10.3); // mirrors (satin)
+    add(dark, new THREE.BoxGeometry(2.0, 1.5, 3.0), 8.8, 13.6, 10.3);
+    for (const sz of [-1, 1]) {                                        // slim LED DRLs
+      const led = new THREE.BoxGeometry(1.2, 0.75, 5.2);
+      led.translate(22.3, 9.9, sz * 5.4);
       glow.push(led);
     }
     {                                                                  // full-width light bar
-      const bar = new THREE.BoxGeometry(0.9, 0.9, 16.5);
-      bar.translate(-22.5, 11.2, 0);
+      const bar = new THREE.BoxGeometry(0.8, 0.8, 15.6);
+      bar.translate(-22.4, 11.0, 0);
       glowRed.push(bar);
     }
-    wheels = [[13.5, -9.6, true], [13.5, 9.6, true], [-13.5, -9.6, false], [-13.5, 9.6, false]];
-    wheelScale = 1.05;
+    wheels = [[13.5, -9.4, true], [13.5, 9.4, true], [-13.5, -9.4, false], [-13.5, 9.4, false]];
+    wheelScale = 1.08;
     seat = { x: -1, y: 6.5 };
-    plate = [23.8, 7.4];
+    plate = [23.0, 7.2];
   } else { // FUSÉE (rocket kart)
     add(body, new THREE.CylinderGeometry(6.5, 7.5, 26, 16), 0, 9.5, 0, 1, 1, 1, 0, 0, Math.PI / 2);    // rocket body
     add(body, new THREE.ConeGeometry(6.5, 14, 16), 20, 9.5, 0, 1, 1, 1, 0, 0, -Math.PI / 2);           // nose cone
@@ -1038,7 +1164,7 @@ function getVehGeo(type) {
     glow: glow.length ? mergeGeometries(glow) : null,
     glowRed: glowRed.length ? mergeGeometries(glowRed) : null,
     glass: glass.length ? mergeGeometries(glass) : null,
-    wheels, hover, seat, thrusters, wheelScale, plate,
+    wheels, hover, seat, thrusters, wheelScale, plate, bodyMap,
   };
   VEH_GEO_CACHE[type] = geo;
   return geo;
@@ -1101,6 +1227,7 @@ function buildKartMesh(charIdx, veh = 0, colorOverride = null) {
     color, roughness: veh === 4 ? 0.4 : 0.26, metalness: veh === 4 ? 0.1 : 0.45,
     clearcoat: 1.0, clearcoatRoughness: 0.1, envMapIntensity: 1.15,
   });
+  if (vg.bodyMap) { bodyMat.map = vg.bodyMap; bodyMat.metalness = 0.35; }
   const darkMat = new THREE.MeshStandardMaterial({ color: 0x16161e, roughness: 0.65, metalness: 0.35 });
   const chromeMat = new THREE.MeshStandardMaterial({ color: 0xd8d8e0, roughness: 0.12, metalness: 1.0, envMapIntensity: 1.35 });
 
@@ -1197,6 +1324,28 @@ function buildKartMesh(charIdx, veh = 0, colorOverride = null) {
     thrusterSprites.push(sp);
   }
 
+  { // soft AO disc glued to the road under the car
+    const blobTex = buildKartMesh._blob || (buildKartMesh._blob = (() => {
+      const c2 = document.createElement('canvas');
+      c2.width = c2.height = 64;
+      const g2 = c2.getContext('2d');
+      const gr = g2.createRadialGradient(32, 32, 4, 32, 32, 30);
+      gr.addColorStop(0, 'rgba(0,0,10,0.42)');
+      gr.addColorStop(1, 'rgba(0,0,10,0)');
+      g2.fillStyle = gr; g2.fillRect(0, 0, 64, 64);
+      const t2 = new THREE.CanvasTexture(c2);
+      return t2;
+    })());
+    const blob = new THREE.Mesh(
+      new THREE.CircleGeometry(26, 20).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false })
+    );
+    blob.position.y = 0.45;
+    blob.scale.set(1.15, 1, 0.85);
+    blob.renderOrder = 1;
+    chassis.add(blob);
+  }
+
   const flame = new THREE.Sprite(new THREE.SpriteMaterial({
     map: glowOrange, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.95,
   }));
@@ -1232,10 +1381,10 @@ let kartMeshes = CHARACTERS.map((_, i) => buildKartMesh(i, i === 0 ? vehSel : DE
 // rebuild any kart whose vehicle should change (player picks vehSel, AI keep theirs)
 function ensureKartMeshes() {
   for (let i = 0; i < CHARACTERS.length; i++) {
-    const remoteOv = net.active && i === net.remoteChar && i !== menuChar;
-    const want = remoteOv ? net.remoteVeh
+    const ov = net.active ? netSeatOv(i) : null;
+    const want = ov ? clamp(ov.veh | 0, 0, VEHICLES.length - 1)
       : i === menuChar ? vehSel : DEFAULT_VEH[i];
-    const wantCol = remoteOv ? net.remoteColor
+    const wantCol = ov ? (ov.color || null)
       : i === menuChar ? COLOR_PALETTE[colorSel] : null;
     if (kartMeshes[i].veh !== want || kartMeshes[i].colorOv !== wantCol) {
       scene.remove(kartMeshes[i].group);
@@ -1887,7 +2036,7 @@ function buildTrack(mapIdx) {
   const road = new THREE.Mesh(
     ribbon(cl, 0, HALFW, 0.05, 220),
     new THREE.MeshStandardMaterial({
-      map: roadTex, roughness: 0.9, side: THREE.DoubleSide,
+      map: roadTex, roughness: 0.88, side: THREE.DoubleSide,
       normalMap: roadNormal, normalScale: new THREE.Vector2(0.4, 0.4),
     })
   );
@@ -2049,6 +2198,93 @@ function buildTrack(mapIdx) {
     const inst = new THREE.InstancedMesh(geo, mat, coinData.length);
     group.add(inst);
     track.coins = { inst, data: coinData };
+  }
+
+  // 3D grass tufts hugging the road — instanced crossed blades
+  {
+    let seed = 31;
+    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const blade = mergeGeometries([
+      new THREE.PlaneGeometry(7, 6),
+      new THREE.PlaneGeometry(7, 6).rotateY(Math.PI / 2),
+    ]);
+    blade.translate(0, 3, 0);
+    const tuftMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff, roughness: 1, side: THREE.DoubleSide,
+      map: canvasTexture(64, (g) => {
+        g.clearRect(0, 0, 64, 64);
+        for (let i = 0; i < 22; i++) {
+          const x = 4 + Math.random() * 56;
+          g.strokeStyle = `hsl(${100 + Math.random() * 30}, 45%, ${26 + Math.random() * 16}%)`;
+          g.lineWidth = 2.5;
+          g.beginPath();
+          g.moveTo(x, 64);
+          g.quadraticCurveTo(x + (Math.random() - 0.5) * 10, 30, x + (Math.random() - 0.5) * 16, 6 + Math.random() * 18);
+          g.stroke();
+        }
+      }),
+      transparent: true, alphaTest: 0.35,
+    });
+    const COUNT = 1500;
+    const tufts = new THREE.InstancedMesh(blade, tuftMat, COUNT);
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
+    const v = new THREE.Vector3(), sc = new THREE.Vector3();
+    const col = new THREE.Color();
+    let placed = 0;
+    for (let tries = 0; tries < COUNT * 3 && placed < COUNT; tries++) {
+      const i = Math.floor(rnd() * N);
+      const c = cl[i];
+      const side = rnd() < 0.5 ? -1 : 1;
+      const off = HALFW + 26 + rnd() * 240;
+      const x = c.x + c.nx * side * off;
+      const z = c.y + c.ny * side * off;
+      const s = 0.7 + rnd() * 1.3;
+      e.set(0, rnd() * TAU, 0);
+      q.setFromEuler(e);
+      sc.set(s, s * (0.8 + rnd() * 0.7), s);
+      v.set(x, track.groundYAt(x, z, i) + 0.1, z);
+      m4.compose(v, q, sc);
+      tufts.setMatrixAt(placed, m4);
+      tufts.setColorAt(placed, col.setHSL(0.26 + rnd() * 0.06, 0.5, 0.32 + rnd() * 0.1));
+      placed++;
+    }
+    tufts.count = placed;
+    group.add(tufts);
+    disposables.push(blade, tuftMat.map);
+  }
+
+  // drifting clouds + a proper sun disc
+  {
+    const cloudTex = canvasTexture(128, (g) => {
+      g.clearRect(0, 0, 128, 128);
+      for (let i = 0; i < 9; i++) {
+        const grd = g.createRadialGradient(30 + Math.random() * 68, 50 + Math.random() * 28, 4, 64, 64, 60);
+        grd.addColorStop(0, 'rgba(255,255,255,0.5)');
+        grd.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
+      }
+    });
+    disposables.push(cloudTex);
+    track.clouds = [];
+    for (let i = 0; i < 10; i++) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: cloudTex, transparent: true, opacity: 0.5 + Math.random() * 0.25, depthWrite: false,
+      }));
+      const a = Math.random() * TAU, r = 1100 + Math.random() * 1300;
+      sp.position.set(WORLDC + Math.cos(a) * r, 330 + Math.random() * 240, WORLDC + Math.sin(a) * r);
+      const s = 260 + Math.random() * 420;
+      sp.scale.set(s, s * 0.42, 1);
+      sp.userData.drift = 2 + Math.random() * 5;
+      group.add(sp);
+      track.clouds.push(sp);
+    }
+    const sunSp = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: glowWhite, transparent: true, opacity: 0.9, depthWrite: false,
+      color: new THREE.Color(theme.night ? 0xcfd8ff : 0xffe9b0),
+    }));
+    sunSp.position.set(WORLDC + 1500, 620, WORLDC - 900);
+    sunSp.scale.set(theme.night ? 220 : 380, theme.night ? 220 : 380, 1);
+    group.add(sunSp);
   }
 
   // trees (layered canopies), palms, rocks — all sitting on the terrain
@@ -2843,16 +3079,23 @@ function spinKart(k) {
   if (k.isPlayer) beep(700, 0.4, 'square', 120, 0.15);
 }
 
-/* ---------------- Online duo (WebRTC peer-to-peer via PeerJS) ----------------
-   Two phones connect directly with a 4-digit game code. The host simulates
-   the 6 AI karts and broadcasts them; each player simulates their own kart
-   and their own projectiles ("victim decides" for hits). If the other player
-   drops, we retry for 15s, then the AI quietly takes their wheel. */
+/* ---------------- Online play (WebRTC peer-to-peer via PeerJS) ----------------
+   Up to 8 players. Star topology: every guest talks only to the host, and the
+   host relays positions, items and finishes to everyone else. Each phone
+   simulates its own kart ("victim decides" for hits); the host simulates the
+   remaining AI karts and broadcasts them. If someone drops we retry for 15s,
+   then the AI quietly takes their wheel. */
+const MAX_PLAYERS = 8;
 const net = {
-  active: false, isHost: false, peer: null, conn: null,
+  active: false, isHost: false, peer: null,
+  conn: null,           // guest: my link to the host
+  conns: [],            // host: live guest links (each carries _pinfo)
   code: '', joinCode: '', status: '', error: '',
-  myChar: 0, remoteChar: 1,
-  remoteVeh: 0, remoteColor: null, remoteReady: false,
+  myChar: 0,
+  hostReady: false, locked: false,
+  roster: [],           // display copy: [{c, veh, color, ready, me}]
+  seats: null,          // final assignments at GO: [{c, veh, color}]
+  lostSeats: [],        // host: guests we're waiting for [{char, t}]
   stTimer: 0, aiTimer: 0, retryT: 0, lostT: 0,
   aiGoneT: 0, pendingConnect: null,
 };
@@ -2862,25 +3105,52 @@ function peerOpts() {
   return o ? Object.assign({ debug: 0 }, o) : { debug: 0 };
 }
 
+// guest: send to the host — host: broadcast to every guest
 function netSend(msg) {
-  if (net.conn && net.conn.open) { try { net.conn.send(msg); } catch (e) { /* drop */ } }
+  if (net.isHost) {
+    for (const c of net.conns) { if (c.open) { try { c.send(msg); } catch (e) {} } }
+  } else if (net.conn && net.conn.open) {
+    try { net.conn.send(msg); } catch (e) {}
+  }
 }
 
-/* ---- voice chat: each side calls the other with its mic stream ---- */
+function netRelay(msg, except) {
+  if (!net.isHost) return;
+  for (const c of net.conns) {
+    if (c === except || !c.open) continue;
+    try { c.send(msg); } catch (e) {}
+  }
+}
+
+function netGuestCount() { return net.isHost ? net.conns.filter((c) => c.open).length : 0; }
+function netPlayerCount() { return net.isHost ? 1 + netGuestCount() : Math.max(2, net.roster.length); }
+function netAllReady() {
+  if (!net.isHost) return false;
+  return net.hostReady && netGuestCount() > 0 && net.conns.every((c) => !c.open || (c._pinfo && c._pinfo.ready));
+}
+
+function netSeatOv(charIdx) {
+  if (!net.active || charIdx === menuChar) return null;
+  if (net.seats) { const s = net.seats.find((q) => q.c === charIdx); if (s) return s; }
+  const r = net.roster.find((q) => q.c === charIdx && !q.me);
+  return r || null;
+}
+
+function netHumans() { return karts.filter((k) => k.isPlayer || k.isRemotePlayer); }
+
+/* ---- voice chat: everyone talks with the host (host hears all, all hear host) ---- */
 net.voice = { sending: false, stream: null, calls: [], incoming: 0 };
-let voiceEl = null;
+let voiceEls = [];
 
 function playRemoteVoice(stream) {
-  if (!voiceEl) {
-    voiceEl = document.createElement('audio');
-    voiceEl.autoplay = true;
-    voiceEl.setAttribute('playsinline', '');
-    document.body.appendChild(voiceEl);
-  }
-  voiceEl.srcObject = stream;
-  const tryPlay = () => voiceEl.play().catch(() => {
-    // iOS: retry on the next user gesture
-    document.addEventListener('pointerdown', tryPlay, { once: true });
+  const el = document.createElement('audio');
+  el.autoplay = true;
+  el.setAttribute('playsinline', '');
+  el.srcObject = stream;
+  document.body.appendChild(el);
+  voiceEls.push(el);
+  const tryPlay = () => el.play().catch(() => {
+    document.addEventListener('pointerdown', tryPlay, { once: true }); // iOS gesture rule
   });
   tryPlay();
   net.voice.incoming++;
@@ -2897,16 +3167,20 @@ function voiceAnswer(call) {
 
 async function voiceToggle() {
   if (net.voice.sending) { voiceStopSending(); updateMicBtn(); return; }
-  if (!(net.conn && net.conn.open)) return;
+  const peers = net.isHost ? net.conns.filter((c) => c.open).map((c) => c.peer)
+    : (net.conn && net.conn.open ? [net.conn.peer] : []);
+  if (!peers.length) return;
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
     net.voice.stream = stream;
     net.voice.sending = true;
-    const call = net.peer.call(net.conn.peer, stream, { metadata: { type: 'voice' } });
-    if (call) {
-      call.on('stream', playRemoteVoice); // the other side may answer with its mic
-      call.on('close', () => { net.voice.calls = net.voice.calls.filter((c) => c !== call); });
-      net.voice.calls.push(call);
+    for (const pid of peers) {
+      const call = net.peer.call(pid, stream, { metadata: { type: 'voice' } });
+      if (call) {
+        call.on('stream', playRemoteVoice);
+        call.on('close', () => { net.voice.calls = net.voice.calls.filter((c) => c !== call); });
+        net.voice.calls.push(call);
+      }
     }
     beep(880, 0.1, 'square', 1320);
   } catch (e) {
@@ -2927,33 +3201,40 @@ function voiceShutdown() {
   for (const c of net.voice.calls) { try { c.close(); } catch (e) {} }
   net.voice.calls = [];
   net.voice.incoming = 0;
-  if (voiceEl) { try { voiceEl.srcObject = null; } catch (e) {} }
+  for (const el of voiceEls) { try { el.srcObject = null; el.remove(); } catch (e) {} }
+  voiceEls = [];
   updateMicBtn();
 }
 
 const micBtn = document.getElementById('btnMic');
+function netLinkUp() {
+  return net.active && (net.isHost ? net.conns.some((c) => c.open) : !!(net.conn && net.conn.open));
+}
 function updateMicBtn() {
   if (!micBtn) return;
-  const show = net.active && net.conn && net.conn.open;
-  micBtn.style.display = show ? '' : 'none';
+  micBtn.style.display = netLinkUp() ? '' : 'none';
   micBtn.textContent = net.voice.sending ? '🎙 ON' : '🎙 OFF';
   micBtn.classList.toggle('on', net.voice.sending);
 }
 if (micBtn) micBtn.addEventListener('click', () => { voiceToggle(); });
 
+/* ---- lobby lifecycle ---- */
 function netHost() {
   netQuit(true);
   if (typeof Peer === 'undefined') { net.error = 'Réseau indisponible'; state = 'mp'; return; }
   net.active = true; net.isHost = true;
-  net.myChar = 0; net.remoteChar = 1;
+  net.myChar = menuChar = 0;
   net.code = String(1000 + Math.floor(Math.random() * 9000));
   net.status = 'Création de la partie…';
   const p = new Peer('iamkart-' + net.code, peerOpts());
   net.peer = p;
   p.on('open', () => { net.status = ''; });
   p.on('connection', (c) => {
-    if (net.conn && net.conn.open) { try { c.close(); } catch (e) {} return; } // duo only
-    netAttach(c);
+    if (net.locked || netGuestCount() >= MAX_PLAYERS - 1) {
+      try { c.on('open', () => { c.send({ t: 'full' }); setTimeout(() => c.close(), 400); }); } catch (e) {}
+      return;
+    }
+    hostAttach(c);
   });
   p.on('call', voiceAnswer);
   p.on('error', (err) => {
@@ -2966,11 +3247,45 @@ function netHost() {
   state = 'mp-host';
 }
 
+function hostAttach(c) {
+  c._pinfo = { char: -1, veh: 0, color: null, ready: false };
+  net.conns.push(c);
+  c.on('open', () => {
+    beep(660, 0.12, 'square', 990);
+    hostRosterChanged();
+  });
+  c.on('data', (m) => { try { netOnData(m, c); } catch (e) { /* malformed */ } });
+  c.on('close', () => hostDropConn(c));
+  c.on('error', () => hostDropConn(c));
+}
+
+function hostDropConn(c) {
+  if (!net.conns.includes(c)) return;
+  const racing = state === 'race' || state === 'countdown' || state === 'finish';
+  net.conns = net.conns.filter((q) => q !== c);
+  if (racing && c._pinfo && c._pinfo.char >= 0) {
+    net.lostSeats.push({ char: c._pinfo.char, t: 0.001 }); // reconnection window
+  } else {
+    hostRosterChanged();
+  }
+}
+
+function hostRosterChanged() {
+  if (!net.isHost) return;
+  const ps = [{ c: menuChar, veh: vehSel, color: COLOR_PALETTE[colorSel], ready: net.hostReady, host: true }];
+  for (const c of net.conns) {
+    if (!c.open || !c._pinfo) continue;
+    ps.push({ c: c._pinfo.char, veh: c._pinfo.veh, color: c._pinfo.color, ready: c._pinfo.ready });
+  }
+  net.roster = ps.map((p2) => Object.assign({}, p2, { me: !!p2.host }));
+  netSend({ t: 'roster', ps });
+}
+
 function netJoinInit() {
   netQuit(true);
   if (typeof Peer === 'undefined') { net.error = 'Réseau indisponible'; state = 'mp'; return; }
   net.active = true; net.isHost = false;
-  net.myChar = 1; net.remoteChar = 0;
+  net.myChar = menuChar = 1;
   net.joinCode = '';
   const p = new Peer(peerOpts());
   net.peer = p;
@@ -2991,26 +3306,26 @@ function netJoinInit() {
 function netConnectTo(code) {
   if (!net.peer || net.peer.destroyed) return;
   net.code = String(code);
-  if (!net.peer.open) { net.pendingConnect = String(code); return; } // connect once registered
+  if (!net.peer.open) { net.pendingConnect = String(code); return; }
   net.status = 'Connexion…';
   const c = net.peer.connect('iamkart-' + code, { reliable: true, serialization: 'json' });
-  if (c) netAttach(c);
+  if (c) guestAttach(c);
 }
 
-function netAttach(c) {
+function guestAttach(c) {
   net.conn = c;
   c.on('open', () => {
     net.lostT = 0; net.retryT = 0; net.error = ''; net.status = '';
     beep(660, 0.12, 'square', 990);
-    if (state === 'mp-host' || state === 'mp-join') {
-      // fresh lobby: the host also picks the cc class, the guest goes straight to the garage
-      net.remoteReady = false;
+    if (state === 'race' || state === 'countdown' || state === 'finish') {
+      netSend({ t: 'resume', c: net.myChar }); // back from a drop mid-race
+    } else if (state === 'mp-join') {
       menuChar = net.myChar;
       resetRace(menuChar);
-      state = net.isHost ? 'cc' : 'char';
+      state = 'char'; // straight to the garage; the host picks cc + map
     }
   });
-  c.on('data', (m) => { try { netOnData(m); } catch (e) { /* malformed */ } });
+  c.on('data', (m) => { try { netOnData(m, null); } catch (e) { /* malformed */ } });
   c.on('close', () => netLost());
   c.on('error', () => netLost());
 }
@@ -3023,26 +3338,28 @@ function netFail(err) {
 function netShutdownPeer() {
   voiceShutdown();
   try { if (net.conn) net.conn.close(); } catch (e) {}
+  for (const c of net.conns) { try { c.close(); } catch (e) {} }
   try { if (net.peer) net.peer.destroy(); } catch (e) {}
-  net.conn = null; net.peer = null;
+  net.conn = null; net.conns = []; net.peer = null;
 }
 
 function netQuit(silent) {
-  if (!silent && net.conn && net.conn.open) netSend({ t: 'bye' });
+  if (!silent) netSend({ t: 'bye' });
   netShutdownPeer();
   net.active = false; net.isHost = false;
   net.status = ''; net.error = ''; net.joinCode = '';
-  net.remoteReady = false; net.lostT = 0; net.retryT = 0;
-  net.pendingConnect = null;
+  net.hostReady = false; net.locked = false;
+  net.roster = []; net.seats = null; net.lostSeats = [];
+  net.lostT = 0; net.retryT = 0; net.pendingConnect = null;
 }
 
 function netRemoteKart() { return karts.find((k) => k.isRemotePlayer); }
 
-// the other player vanished mid-game
+// my link to the game vanished (guest side)
 function netLost() {
-  if (!net.active) return;
+  if (!net.active || net.isHost) return;
   if (state === 'race' || state === 'countdown') {
-    if (net.lostT <= 0) { net.lostT = 0.001; net.retryT = 2.0; } // reconnection window opens
+    if (net.lostT <= 0) { net.lostT = 0.001; net.retryT = 2.0; }
   } else if (state === 'finish') {
     netToAI();
   } else {
@@ -3053,11 +3370,39 @@ function netLost() {
   }
 }
 
-// give every network kart back to the local simulation
+// give every network kart back to the local simulation (guest fallback)
 function netToAI() {
   for (const k of karts) if (k.netDriven) { k.netDriven = false; k.isPlayer = false; k.isRemotePlayer = false; }
   net.aiGoneT = 5;
   netQuit(true);
+}
+
+/* ---- race launch ---- */
+function netLaunchRace() {
+  if (!net.isHost || !netAllReady()) return;
+  net.locked = true;
+  net.myChar = menuChar;
+  // seat assignment: host first, then guests in join order; clashes shift to a free char
+  const taken = new Set();
+  const seats = [];
+  const grab = (want, veh, color) => {
+    let c2 = clamp(want | 0, 0, CHARACTERS.length - 1);
+    while (taken.has(c2)) c2 = (c2 + 1) % CHARACTERS.length;
+    taken.add(c2);
+    seats.push({ c: c2, veh, color });
+    return c2;
+  };
+  grab(menuChar, vehSel, COLOR_PALETTE[colorSel]);
+  for (const c of net.conns) {
+    if (!c.open || !c._pinfo) continue;
+    c._pinfo.char = grab(c._pinfo.char, c._pinfo.veh, c._pinfo.color);
+  }
+  net.seats = seats;
+  for (const c of net.conns) {
+    if (!c.open || !c._pinfo) continue;
+    try { c.send({ t: 'go', map: mapSel, cc: ccSel, you: c._pinfo.char, seats }); } catch (e) {}
+  }
+  duoStartRace();
 }
 
 function duoStartRace() {
@@ -3071,36 +3416,41 @@ function duoStartRace() {
 }
 
 function duoResetRace() {
-  // identical grid on both phones: char 0 on pole, char 1 second, AI behind
-  resetRace(0);
-  const me = karts.find((k) => k.charIdx === net.myChar);
-  const other = karts.find((k) => k.charIdx === net.remoteChar);
-  karts[0].isPlayer = false;
-  me.isPlayer = true;
-  player = me;
-  other.isPlayer = false;
-  other.netDriven = true;
-  other.isRemotePlayer = true;
-  if (!net.isHost) for (const k of karts) if (k !== me && k !== other) k.netDriven = true;
+  resetRace(0); // deterministic grid: char order 0..7 on every phone
+  const seats = net.seats || [];
+  for (const k of karts) { k.isPlayer = false; k.netDriven = false; k.isRemotePlayer = false; k.humanNo = 0; }
+  seats.forEach((s, i) => {
+    const k = karts.find((q) => q.charIdx === s.c);
+    if (!k) return;
+    k.humanNo = i + 1;
+    if (s.c === net.myChar) { k.isPlayer = true; player = k; }
+    else { k.netDriven = true; k.isRemotePlayer = true; }
+  });
+  if (!player) { player = karts[0]; player.isPlayer = true; } // safety net
+  if (!net.isHost) for (const k of karts) if (!k.isPlayer && !k.isRemotePlayer) k.netDriven = true;
   camAngle = player.angle;
 }
 
 function duoRematch() {
-  if (!net.active || !(net.conn && net.conn.open)) return;
-  netSend({ t: 'rematch' });
-  duoStartRace();
+  if (!net.active) return;
+  if (net.isHost) netLaunchRace();
+  else netSend({ t: 'rematch' });
 }
 
-function netOnData(m) {
+/* ---- message handling (fromConn is set on the host side) ---- */
+function netOnData(m, fromConn) {
   if (!m || typeof m !== 'object') return;
-  if (m.t === 'st') {                       // the other player's kart
-    const k = netRemoteKart();
+  if (m.t === 'pst') {                      // another player's kart
+    const c2 = m.c | 0;
+    if (net.isHost && fromConn) netRelay(m, fromConn);
+    if (net.isHost && fromConn && fromConn._pinfo && fromConn._pinfo.char !== c2) return; // spoof guard
+    const k = karts.find((q) => q.charIdx === c2 && q.isRemotePlayer);
     if (k) {
       k.netT = { x: +m.x, y: +m.y, a: +m.a, s: +m.s, age: 0 };
       k.lap = m.l | 0; k.trackIdx = (m.ti | 0) % N;
       k.key = k.lap * N + k.trackIdx;
       k.spinT = +m.sp || 0; k.starT = +m.st || 0; k.boostT = +m.b || 0;
-      k.coins = m.c | 0; k.steerVis = +m.sv || 0;
+      k.coins = m.co | 0; k.steerVis = +m.sv || 0;
     }
   } else if (m.t === 'ai') {                // host's AI fleet (guest side)
     if (!net.isHost && Array.isArray(m.ks)) for (const s of m.ks) {
@@ -3113,37 +3463,65 @@ function netOnData(m) {
         if (+s.ft) k.finishTime = +s.ft;
       }
     }
-  } else if (m.t === 'ready') {             // the other player picked veh + color + pilot
-    net.remoteVeh = clamp(m.veh | 0, 0, VEHICLES.length - 1);
-    net.remoteColor = typeof m.color === 'string' ? m.color : null;
-    if (m.char !== undefined) net.remoteChar = clamp(m.char | 0, 0, CHARACTERS.length - 1);
-    net.remoteReady = true;
-    ensureKartMeshes();
-  } else if (m.t === 'go') {                // host launches with final pilot assignments
+  } else if (m.t === 'ready') {             // a guest picked veh + color + pilot
+    if (net.isHost && fromConn) {
+      fromConn._pinfo = {
+        char: clamp(m.char | 0, 0, CHARACTERS.length - 1),
+        veh: clamp(m.veh | 0, 0, VEHICLES.length - 1),
+        color: typeof m.color === 'string' ? m.color : null,
+        ready: true,
+      };
+      hostRosterChanged();
+      ensureKartMeshes();
+    }
+  } else if (m.t === 'roster') {            // lobby state from the host
+    if (!net.isHost && Array.isArray(m.ps)) {
+      net.roster = m.ps.map((p2) => ({
+        c: p2.c | 0, veh: p2.veh | 0, color: typeof p2.color === 'string' ? p2.color : null,
+        ready: !!p2.ready, me: false,
+      }));
+      ensureKartMeshes();
+    }
+  } else if (m.t === 'go') {                // host launches with final seats
     if (!net.isHost) {
       mapSel = clamp(m.map | 0, 0, MAPS.length - 1);
       ccSel = clamp(m.cc | 0, 0, CC_CLASSES.length - 1);
       ccMul = CC_CLASSES[ccSel].mul;
-      if (m.hc !== undefined) {
-        net.remoteChar = clamp(m.hc | 0, 0, CHARACTERS.length - 1);
-        net.myChar = clamp(m.gc | 0, 0, CHARACTERS.length - 1);
-        menuChar = net.myChar;
-      }
+      net.myChar = clamp(m.you | 0, 0, CHARACTERS.length - 1);
+      menuChar = net.myChar;
+      net.seats = Array.isArray(m.seats) ? m.seats.map((s) => ({
+        c: clamp(s.c | 0, 0, CHARACTERS.length - 1),
+        veh: clamp(s.veh | 0, 0, VEHICLES.length - 1),
+        color: typeof s.color === 'string' ? s.color : null,
+      })) : [];
       duoStartRace();
     }
   } else if (m.t === 'item') {
+    if (net.isHost && fromConn) netRelay(m, fromConn);
     netSpawnItem(m);
   } else if (m.t === 'fin') {
-    const k = netRemoteKart();
+    if (net.isHost && fromConn) netRelay(m, fromConn);
+    const k = karts.find((q) => q.charIdx === (m.c | 0) && q.isRemotePlayer);
     if (k && !k.finishTime) { k.finishTime = +m.time || raceTime; k.lap = LAPS + 1; }
   } else if (m.t === 'rematch') {
-    if (state === 'finish') duoStartRace();
+    if (net.isHost && state === 'finish') netLaunchRace();
+  } else if (m.t === 'resume') {            // a guest came back mid-race
+    if (net.isHost && fromConn) {
+      const c2 = clamp(m.c | 0, 0, CHARACTERS.length - 1);
+      net.lostSeats = net.lostSeats.filter((l) => l.char !== c2);
+      fromConn._pinfo = { char: c2, veh: 0, color: null, ready: true };
+    }
+  } else if (m.t === 'full') {
+    net.error = 'Partie pleine (8 joueurs max)';
+    netQuit(true);
+    net.active = false;
+    state = 'mp';
   } else if (m.t === 'bye') {
-    netLost();
+    if (!net.isHost) netLost();
   }
 }
 
-// spawn the projectile the other simulation just fired
+// spawn the projectile another simulation just fired
 function netSpawnItem(m) {
   const owner = karts.find((k) => k.charIdx === (m.oc | 0)) || null;
   const ti = (m.ti | 0) % N;
@@ -3170,7 +3548,7 @@ function netSpawnItem(m) {
     scene.add(mesh);
     bananas.push({ x: +m.x, y: +m.y, mesh });
   } else if (m.kind === 'bolt') {
-    // each side applies the lightning to its own kart only
+    // each phone applies the lightning to its own kart only
     if (player && player.key > (m.ok | 0) && player.spinT <= 0 && player.starT <= 0) {
       player.spinT = 1.1; player.speed *= 0.35;
     }
@@ -3200,31 +3578,46 @@ function netLerpKart(k, dt) {
   k.key = k.lap * N + k.trackIdx;
 }
 
-// periodic sends: my kart at 15 Hz, host AI fleet at 10 Hz, reconnection retries
+// periodic sends + reconnection windows
 function netTick(dt) {
   if (micBtn) {
-    const show = net.active && net.conn && net.conn.open;
+    const show = netLinkUp();
     if ((micBtn.style.display === 'none') === show) updateMicBtn();
   }
   if (net.aiGoneT > 0) net.aiGoneT -= dt;
   if (!net.active) return;
-  if (net.lostT > 0) {
+  // guest: reconnection window during a race
+  if (!net.isHost && net.lostT > 0) {
     net.lostT += dt;
     net.retryT -= dt;
     if (net.conn && net.conn.open) { net.lostT = 0; }
-    else if (!net.isHost && net.retryT <= 0 && net.lostT < 15) { net.retryT = 2.5; netConnectTo(net.code); }
+    else if (net.retryT <= 0 && net.lostT < 15) { net.retryT = 2.5; netConnectTo(net.code); }
     else if (net.lostT >= 15) { netToAI(); return; }
+  }
+  // host: per-seat reconnection windows
+  if (net.isHost && net.lostSeats.length) {
+    for (const l of net.lostSeats) l.t += dt;
+    const gone = net.lostSeats.filter((l) => l.t >= 15);
+    if (gone.length) {
+      for (const g2 of gone) {
+        const k = karts.find((q) => q.charIdx === g2.char);
+        if (k) { k.netDriven = false; k.isRemotePlayer = false; } // AI takes the wheel
+      }
+      net.lostSeats = net.lostSeats.filter((l) => l.t < 15);
+      net.aiGoneT = 5;
+    }
   }
   if (state !== 'race' && state !== 'countdown' && state !== 'finish') return;
   net.stTimer -= dt;
   if (net.stTimer <= 0 && player) {
     net.stTimer = 1 / 15;
     const k = player;
-    netSend({
-      t: 'st', x: +k.x.toFixed(1), y: +k.y.toFixed(1), a: +k.angle.toFixed(3), s: +k.speed.toFixed(1),
+    const msg = {
+      t: 'pst', c: net.myChar, x: +k.x.toFixed(1), y: +k.y.toFixed(1), a: +k.angle.toFixed(3), s: +k.speed.toFixed(1),
       l: k.lap, ti: k.trackIdx, sp: +k.spinT.toFixed(2), st: +k.starT.toFixed(2), b: +k.boostT.toFixed(2),
-      c: k.coins, sv: +k.steerVis.toFixed(2),
-    });
+      co: k.coins, sv: +k.steerVis.toFixed(2),
+    };
+    netSend(msg);
   }
   if (net.isHost) {
     net.aiTimer -= dt;
@@ -3576,7 +3969,59 @@ const coinV = new THREE.Vector3();
 const coinS = new THREE.Vector3(1, 1, 1);
 const coinHidden = new THREE.Vector3(0.001, 0.001, 0.001);
 
+const puffTex = radialSprite('rgba(200,195,185,0.55)', 'rgba(230,225,215,0.7)');
+const PUFFS = [];
+for (let i = 0; i < 44; i++) {
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTex, transparent: true, opacity: 0, depthWrite: false }));
+  sp.visible = false;
+  scene.add(sp);
+  PUFFS.push({ sp, life: 0, max: 1, vy: 0, grow: 0 });
+}
+let puffCursor = 0;
+function spawnPuff(x, y, z, kind) {
+  const p = PUFFS[puffCursor++ % PUFFS.length];
+  p.life = p.max = kind === 'boost' ? 0.5 : 0.85;
+  p.vy = kind === 'dust' ? 9 : 14;
+  p.grow = kind === 'boost' ? 44 : 30;
+  p.sp.position.set(x + (Math.random() - 0.5) * 8, y + 2, z + (Math.random() - 0.5) * 8);
+  p.sp.material.color.set(kind === 'boost' ? 0xffa050 : kind === 'drift' ? 0xdfe8f2 : 0xb9a98c);
+  p.sp.material.opacity = kind === 'dust' ? 0.5 : 0.65;
+  p.sp.scale.set(10, 10, 1);
+  p.sp.visible = true;
+}
+let puffAcc = 0;
+function updatePuffs(dt) {
+  for (const p of PUFFS) {
+    if (p.life <= 0) { p.sp.visible = false; continue; }
+    p.life -= dt;
+    p.sp.position.y += p.vy * dt;
+    const t2 = 1 - p.life / p.max;
+    const s = 10 + p.grow * t2;
+    p.sp.scale.set(s, s, 1);
+    p.sp.material.opacity = (1 - t2) * 0.55;
+  }
+  // emit from lively karts (player + anyone near)
+  puffAcc += dt;
+  if (puffAcc < 0.06 || state !== 'race') return;
+  puffAcc = 0;
+  for (const k of karts) {
+    const c = center[k.trackIdx];
+    const lat = Math.abs(lateralOffset(k, c));
+    const off = lat > HALFW + 12;
+    const y = (k.visY || 0);
+    const bx = k.x - Math.cos(k.angle) * 16, bz = k.y - Math.sin(k.angle) * 16;
+    if (off && k.speed > 50) spawnPuff(bx, y, bz, 'dust');
+    else if (k.isPlayer && k.driftCharge > 0.25) spawnPuff(bx, y, bz, 'drift');
+    if (k.boostT > 0.1) spawnPuff(bx, y, bz, 'boost');
+  }
+}
+
 function updateWorldFX(dt, t) {
+  updatePuffs(dt);
+  if (track.clouds) for (const sp of track.clouds) {
+    sp.position.x += sp.userData.drift * dt;
+    if (sp.position.x > WORLDC + 2600) sp.position.x = WORLDC - 2600;
+  }
   if (track.neonMat) track.neonMat.opacity = 0.6 + Math.sin(t * 2.2) * 0.25;
   for (const p of track.boostPads) p.tex.offset.y = (p.tex.offset.y - dt * 1.6) % 1;
   for (const b of track.itemBoxes) {
@@ -3938,11 +4383,11 @@ function drawHUD() {
   for (const k of karts) {
     const mx = HW - 94 + k.x / 2048 * 84, my = mmY + k.y / 2048 * 84;
     if (k.isRemotePlayer) {
-      // Joueur 2 : gros point doré cerclé + « 2 »
+      // autre joueur : gros point doré cerclé + numéro
       hctx.fillStyle = '#ffd24a';
       hctx.strokeStyle = '#fff'; hctx.lineWidth = 1.4;
       hctx.beginPath(); hctx.arc(mx, my, 4.2, 0, TAU); hctx.fill(); hctx.stroke();
-      text('2', mx, my - 5.5, 8, 'center', '#16161e');
+      text(String(k.humanNo || 2), mx, my - 5.5, 8, 'center', '#16161e');
     } else {
       hctx.fillStyle = k.isPlayer ? '#fff' : CHARACTERS[k.charIdx].color;
       hctx.beginPath(); hctx.arc(mx, my, k.isPlayer ? 3 : 2.2, 0, TAU); hctx.fill();
@@ -3958,7 +4403,7 @@ function drawHUD() {
       ly += 12;
     });
     const rk = netRemoteKart();
-    if (rk) {
+    if (rk && humans.length === 2) {
       const ahead = rk.key > player.key;
       text(ahead ? '▲ J2 devant' : '▼ J2 derrière', HW - 52, ly + 2, 9, 'center', ahead ? '#ffb04a' : '#6ede3a');
     }
@@ -4061,12 +4506,23 @@ function drawMpMenu() {
 function drawMpHost() {
   hctx.fillStyle = 'rgba(8,5,25,0.6)';
   hctx.fillRect(0, 0, HW, HB);
-  text('TON CODE DE PARTIE', HW / 2, MY(22), 20, 'center', '#40e0ff');
-  text((net.code || '····').split('').join('  '), HW / 2, MY(64), 56, 'center', '#ffd24a');
-  text("Donne ce code à l'autre joueur", HW / 2, MY(148), 14, 'center', '#fff');
-  const dots = '.'.repeat(1 + ((perfNow / 400) | 0) % 3);
-  text((net.status || 'En attente du joueur 2') + dots, HW / 2, MY(178), 13, 'center', '#9fe');
-  if (net.error) text('⚠ ' + net.error, HW / 2, MY(210), 12, 'center', '#ff7c6a');
+  text('TON CODE DE PARTIE', HW / 2, MY(6), 20, 'center', '#40e0ff');
+  text((net.code || '····').split('').join('  '), HW / 2, MY(34), 52, 'center', '#ffd24a');
+  text('Donne ce code aux autres joueurs (8 max)', HW / 2, MY(96), 13, 'center', '#fff');
+  const n = netGuestCount();
+  text('Toi (hôte) — prêt à accueillir', HW / 2, MY(122), 12, 'center', '#9fe');
+  for (let i = 0; i < n; i++) {
+    const c = net.conns.filter((q) => q.open)[i];
+    const ok = c && c._pinfo && c._pinfo.ready;
+    text(`Joueur ${i + 2} ${ok ? '✓ prêt' : '— connecté'}`, HW / 2, MY(140 + i * 16), 12, 'center', ok ? '#6ede3a' : '#ffd24a');
+  }
+  if (n > 0) {
+    mpButton(MY(196), `ON EST AU COMPLET (${n + 1} joueurs) ▶`, { t: 'mp-complete' });
+  } else {
+    const dots = '.'.repeat(1 + ((perfNow / 400) | 0) % 3);
+    text((net.status || 'En attente des joueurs') + dots, HW / 2, MY(200), 13, 'center', '#9fe');
+  }
+  if (net.error) text('⚠ ' + net.error, HW / 2, MY(232), 12, 'center', '#ff7c6a');
   drawBackBtn();
 }
 
@@ -4103,6 +4559,7 @@ function drawMpWait() {
   hctx.fillRect(0, 0, HW, HB);
   const dots = '.'.repeat(1 + ((perfNow / 400) | 0) % 3);
   text('PRÊT !', HW / 2, MY(60), 26, 'center', '#6ede3a');
+  if (net.roster.length) text(`${net.roster.length} joueur${net.roster.length > 1 ? 's' : ''} dans la partie`, HW / 2, MY(84), 12, 'center', '#9fe');
   text("L'hôte choisit le circuit" + dots, HW / 2, MY(110), 16, 'center', '#fff');
   text('La course démarre toute seule, tiens-toi prêt 🏁', HW / 2, MY(146), 12, 'center', '#9ab');
   drawBackBtn();
@@ -4178,8 +4635,11 @@ function drawPilotSelect() {
   hitR(HW / 2 - 180, MY(90), 100, 110, { t: 'nav', d: -1 });
   hitR(HW / 2 + 80, MY(90), 100, 110, { t: 'nav', d: 1 });
   text(`${menuChar + 1} / ${CHARACTERS.length}`, HW / 2, MY(160), 11, 'center', '#9ab');
-  if (net.active && net.remoteReady)
-    text(`Joueur 2 : ${CHARACTERS[net.remoteChar].name}`, HW / 2, MY(200), 12, 'center', '#9fe');
+  if (net.active && net.roster.length > 1) {
+    const others = net.roster.filter((p) => p.c !== menuChar && p.c >= 0)
+      .map((p) => CHARACTERS[p.c].name).join(' · ');
+    if (others) text('Autres joueurs : ' + others, HW / 2, MY(200), 12, 'center', '#9fe');
+  }
   text('← glisse pour changer →', HW / 2, MY(232), 11, 'center', '#8ac');
   drawGoButton('CONTINUER ▶');
 }
@@ -4222,7 +4682,7 @@ function drawMapSelect() {
       hctx.strokeRect(x - 2, y - 2, th + 4, th + 4);
     }
   });
-  if (net.active && !net.remoteReady) text('En attente du joueur 2…', HW / 2, HB - 42, 14, 'center', '#ffd24a');
+  if (net.active && !netAllReady()) text('En attente des autres joueurs…', HW / 2, HB - 42, 14, 'center', '#ffd24a');
   else drawGoButton('C’EST PARTI ! 🏁');
 }
 
@@ -4255,7 +4715,7 @@ function drawFinish() {
     const big = net.active;
     const y = OY + (big ? 70 : 58) + i * (big ? 34 : 22);
     text(PLACE_TXT[place], HW / 2 - 130, y, big ? 20 : 14, 'left', PLACE_COL[place]);
-    text((k.isPlayer ? ch.name + '  ★ toi' : big ? ch.name + '  (joueur 2)' : kartName(k)), HW / 2 - 70, y, big ? 18 : 14, 'left', k.isPlayer ? '#fff' : ch.color);
+    text((k.isPlayer ? ch.name + '  ★ toi' : big ? ch.name + `  (J${k.humanNo || 2})` : kartName(k)), HW / 2 - 70, y, big ? 18 : 14, 'left', k.isPlayer ? '#fff' : ch.color);
     if (k.finishTime) text(fmtTime(k.finishTime), HW / 2 + 130, y, big ? 16 : 12, 'right', '#cfe');
     else if (big) text('en course…', HW / 2 + 130, y, 12, 'right', '#9ab');
   });
@@ -4268,8 +4728,8 @@ function drawFinish() {
     text(`Meilleur tour : ${fmtTime(best)}`, HW / 2, HB - 44, 11, 'center', '#9fe');
   }
   if (net.active) {
-    const rk = netRemoteKart();
-    if (rk && !rk.finishTime) text("L'autre joueur roule encore…", HW / 2, HB - 78, 11, 'center', '#9fe');
+    const still = netHumans().filter((k) => !k.isPlayer && !k.finishTime).length;
+    if (still) text(still === 1 ? 'Un joueur roule encore…' : `${still} joueurs roulent encore…`, HW / 2, HB - 78, 11, 'center', '#9fe');
     if (!pendingRecord) {
       const w = 210, h = 32, x = HW / 2 - w / 2, y = HB - 40;
       hctx.fillStyle = 'rgba(30,140,80,0.8)';
@@ -4356,6 +4816,12 @@ function frame(t) {
     } else if (a.t === 'duo') { net.error = ''; state = 'mp'; beep(560, 0.08, 'square');
     } else if (a.t === 'mp-create') { netHost(); beep(560, 0.08, 'square');
     } else if (a.t === 'mp-goto-join') { netJoinInit(); beep(560, 0.08, 'square');
+    } else if (a.t === 'mp-complete') {
+      if (net.isHost && netGuestCount() > 0) {
+        net.locked = true; // plus personne ne peut rejoindre
+        state = 'cc';
+        beep(560, 0.08, 'square');
+      }
     } else if (a.t === 'digit') {
       if (net.joinCode.length < 4) { net.joinCode += String(a.d); beep(660, 0.05, 'square'); }
       if (net.joinCode.length === 4) { net.error = ''; netConnectTo(net.joinCode); }
@@ -4446,8 +4912,11 @@ function frame(t) {
     if (itemPressed) { state = 'color'; beep(360, 0.08, 'square'); }
     else if (startPressed) {
       if (net.active) {
-        netSend({ t: 'ready', veh: vehSel, color: COLOR_PALETTE[colorSel], char: menuChar });
-        state = net.isHost ? 'map' : 'mp-wait';
+        if (net.isHost) { net.hostReady = true; hostRosterChanged(); state = 'map'; }
+        else {
+          netSend({ t: 'ready', veh: vehSel, color: COLOR_PALETTE[colorSel], char: menuChar });
+          state = 'mp-wait';
+        }
       } else state = 'map';
       beep(560, 0.08, 'square');
     }
@@ -4464,15 +4933,7 @@ function frame(t) {
     if (itemPressed) { state = 'color'; beep(360, 0.08, 'square'); }
     else if (startPressed) {
       if (net.active) {
-        if (net.remoteReady && net.conn && net.conn.open) {
-          // same pilot picked twice? the guest gets the next free seat
-          net.myChar = menuChar;
-          let gc = net.remoteChar;
-          if (gc === net.myChar) gc = (gc + 1) % CHARACTERS.length;
-          net.remoteChar = gc;
-          netSend({ t: 'go', map: mapSel, cc: ccSel, hc: net.myChar, gc });
-          duoStartRace();
-        }
+        netLaunchRace();
       } else {
         resetRace(menuChar);
         state = 'countdown';
@@ -4487,6 +4948,7 @@ function frame(t) {
     if (countdownT >= 3) { raceTime = 0; state = 'race'; }
   } else if (state === 'mp' || state === 'mp-host' || state === 'mp-join' || state === 'mp-wait') {
     if (itemPressed) uiQueue.push({ t: 'back' });
+    if (startPressed && state === 'mp-host') uiQueue.push({ t: 'mp-complete' });
   }
 
   netTick(dt);
@@ -4505,7 +4967,7 @@ function frame(t) {
       pendingRecord = net.active ? null : { time: player.finishTime, laps: [...player.lapTimes] };
       nameAsked = false;
       newRecordRank = -1;
-      if (net.active) netSend({ t: 'fin', time: player.finishTime });
+      if (net.active) netSend({ t: 'fin', c: net.myChar, time: player.finishTime });
       spawnConfetti();
       beep(523, 0.15, 'square'); beep(659, 0.15, 'square');
       setTimeout(() => beep(784, 0.3, 'square', 1046), 180);
@@ -4617,12 +5079,15 @@ window.IAM = {
   get net() {
     return {
       active: net.active, isHost: net.isHost, code: net.code,
-      open: !!(net.conn && net.conn.open), status: net.status, error: net.error,
-      remoteReady: net.remoteReady, lostT: net.lostT,
+      open: netLinkUp(), status: net.status, error: net.error,
+      remoteReady: netAllReady(), players: netPlayerCount(), guests: netGuestCount(),
+      locked: net.locked, lostT: net.lostT, lostSeats: net.lostSeats.length,
+      roster: net.roster.map((p) => ({ c: p.c, ready: p.ready })),
       voiceSending: net.voice ? net.voice.sending : false,
       voiceIncoming: net.voice ? net.voice.incoming : 0,
     };
   },
+  mpComplete() { uiQueue.push({ t: 'mp-complete' }); },
   voiceToggle() { voiceToggle(); },
   start(mapIdx = 0, ccIdx = 2, charIdx = 0) {
     menuChar = charIdx; mapSel = mapIdx; ccSel = ccIdx;

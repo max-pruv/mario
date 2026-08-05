@@ -539,109 +539,275 @@ const groundNormal = noiseNormalMap(128, 16, 3.0);
 // photo; drawn in code, no personal data shipped)
 function makeFaceTexture(charIdx = -1) {
   const c = document.createElement('canvas');
-  c.width = 256; c.height = 128;
+  c.width = 512; c.height = 256;
   const g = c.getContext('2d');
-  const skin = charIdx <= 2 && charIdx >= 0 ? '#f0c8a4' : '#f6c9a0';
-  g.fillStyle = skin; g.fillRect(0, 0, 256, 128);
-  const sh = g.createLinearGradient(0, 0, 0, 128);
-  sh.addColorStop(0, 'rgba(255,255,255,0.10)');
-  sh.addColorStop(1, 'rgba(120,70,40,0.15)');
-  g.fillStyle = sh; g.fillRect(0, 0, 256, 128);
+  g.scale(2, 2); // same 256x128 logical layout as before, twice the detail
+  const kid = charIdx >= 0 && charIdx <= 2;
   const cx = 128, cy = 62;
-  const HAIR = ['#5d4326', '#4e3a22', '#54381e'][charIdx] || null;
+  let seed = 7 + charIdx * 131;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
 
-  // hair painted on the texture (crown + side falls)
+  // ---- skin: warm base + painted volume (light from above-left) ----
+  const SKIN = kid ? ['#f2cba6', '#f4cda6', '#eec49e'][charIdx] : '#f6c9a0';
+  g.fillStyle = SKIN; g.fillRect(0, 0, 256, 128);
+  const vsh = g.createLinearGradient(0, 0, 0, 128);
+  vsh.addColorStop(0, 'rgba(255,240,220,0.18)');
+  vsh.addColorStop(0.55, 'rgba(255,255,255,0)');
+  vsh.addColorStop(1, 'rgba(122,70,42,0.22)');
+  g.fillStyle = vsh; g.fillRect(0, 0, 256, 128);
+  const key = g.createRadialGradient(cx - 22, 36, 8, cx - 22, 36, 115);
+  key.addColorStop(0, 'rgba(255,238,215,0.32)');
+  key.addColorStop(1, 'rgba(255,238,215,0)');
+  g.fillStyle = key; g.fillRect(0, 0, 256, 128);
+  for (const sx of [-1, 1]) { // cheekbone shading
+    const gg = g.createRadialGradient(cx + sx * 54, cy + 20, 6, cx + sx * 54, cy + 20, 48);
+    gg.addColorStop(0, 'rgba(150,90,55,0.13)');
+    gg.addColorStop(1, 'rgba(150,90,55,0)');
+    g.fillStyle = gg; g.fillRect(0, 0, 256, 128);
+  }
+  const chin = g.createRadialGradient(cx, 126, 4, cx, 126, 42);
+  chin.addColorStop(0, 'rgba(140,80,48,0.16)');
+  chin.addColorStop(1, 'rgba(140,80,48,0)');
+  g.fillStyle = chin; g.fillRect(0, 0, 256, 128);
+
+  // ---- hair: base masses + individual strands in 3 tones ----
+  const HAIR = kid ? ['#5d4326', '#4e3a22', '#54381e'][charIdx] : null;
+  const strand = (x1, y1, x2, y2, tone, w, bow = 6) => {
+    g.strokeStyle = tone; g.lineWidth = w; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(x1, y1);
+    g.quadraticCurveTo((x1 + x2) / 2 + bow, (y1 + y2) / 2, x2, y2);
+    g.stroke();
+  };
   if (HAIR) {
+    const dark = ['#3e2c15', '#332512', '#38240f'][charIdx];
+    const lite = ['#8a6a3c', '#7a5f36', '#7d5a30'][charIdx];
     g.fillStyle = HAIR;
-    g.fillRect(0, 0, 256, 30); // crown
     if (charIdx === 0) { // Inès: wavy, shoulder-length, middle part
-      g.fillRect(0, 0, 78, 128);
-      g.fillRect(178, 0, 78, 128);
-      g.beginPath(); g.moveTo(78, 30); g.quadraticCurveTo(88, 60, 78, 128); g.lineTo(60, 128); g.lineTo(60, 30); g.fill();
-      g.beginPath(); g.moveTo(178, 30); g.quadraticCurveTo(168, 60, 178, 128); g.lineTo(196, 128); g.lineTo(196, 30); g.fill();
-      g.strokeStyle = 'rgba(40,26,12,0.6)'; g.lineWidth = 2;
-      g.beginPath(); g.moveTo(128, 0); g.lineTo(128, 26); g.stroke(); // middle part
-    } else if (charIdx === 1) { // Alice: long straight hair
-      g.fillRect(0, 0, 70, 128);
-      g.fillRect(186, 0, 70, 128);
-      g.fillRect(0, 0, 256, 36);
-    } else { // Marlon: short tousled hair
-      g.fillRect(0, 0, 62, 74);
-      g.fillRect(194, 0, 62, 74);
+      g.fillRect(0, 0, 78, 128); g.fillRect(178, 0, 78, 128); g.fillRect(0, 0, 256, 30);
+      g.beginPath(); g.moveTo(78, 30); g.quadraticCurveTo(90, 62, 78, 128); g.lineTo(56, 128); g.lineTo(56, 30); g.fill();
+      g.beginPath(); g.moveTo(178, 30); g.quadraticCurveTo(166, 62, 178, 128); g.lineTo(200, 128); g.lineTo(200, 30); g.fill();
+      for (let i = 0; i < 14; i++) { // waves: S-curved strands falling on both sides
+        const sx = i < 7 ? 1 : -1, o = (i % 7) * 9 + rnd() * 5;
+        const x0 = cx + sx * (58 + o * 0.55), amp = 5 + rnd() * 5;
+        g.strokeStyle = i % 3 === 0 ? lite : dark; g.lineWidth = 1.6 + rnd() * 1.4; g.lineCap = 'round';
+        g.beginPath(); g.moveTo(x0, 8 + rnd() * 8);
+        g.bezierCurveTo(x0 + sx * amp, 40, x0 - sx * amp, 78, x0 + sx * amp * 0.7, 124);
+        g.stroke();
+      }
+      g.strokeStyle = dark; g.lineWidth = 2.4;
+      g.beginPath(); g.moveTo(128, 0); g.lineTo(128, 27); g.stroke(); // middle part
+      for (const sx of [-1, 1]) { // crown swept from the part
+        for (let i = 1; i <= 5; i++)
+          strand(128 + sx * 2, 3 + i * 2, 128 + sx * (30 + i * 9), 26 + i * 1.5, i % 2 ? dark : lite, 1.5, sx * 8);
+      }
+    } else if (charIdx === 1) { // Alice: long, straight, glossy
+      g.fillRect(0, 0, 70, 128); g.fillRect(186, 0, 70, 128); g.fillRect(0, 0, 256, 36);
+      for (let i = 0; i < 16; i++) { // straight falls
+        const sx = i < 8 ? -1 : 1, o = (i % 8) * 8 + rnd() * 4;
+        const x0 = cx + sx * (62 + o * 0.5);
+        strand(x0, 6 + rnd() * 6, x0 + sx * 2, 126, i % 4 === 0 ? lite : dark, 1.4 + rnd(), sx * 2);
+      }
+      g.strokeStyle = 'rgba(255,225,170,0.30)'; g.lineWidth = 5; // shine band
+      g.beginPath(); g.arc(cx, 66, 92, Math.PI * 1.22, Math.PI * 1.78); g.stroke();
+      for (const sx of [-1, 1])
+        for (let i = 1; i <= 6; i++)
+          strand(cx + sx * 6, 4 + i, cx + sx * (34 + i * 10), 30 + i, i % 2 ? dark : HAIR, 1.5, sx * 6);
+    } else { // Marlon: short, tousled, spiky
+      g.fillRect(0, 0, 62, 74); g.fillRect(194, 0, 62, 74);
       g.beginPath();
       g.moveTo(60, 34);
       for (let x = 60; x <= 196; x += 17)
         g.quadraticCurveTo(x + 8, 20 + (x % 34 ? 8 : 0), x + 17, 34);
       g.lineTo(196, 0); g.lineTo(60, 0);
       g.closePath(); g.fill();
+      for (let i = 0; i < 18; i++) { // tousled flicks, alternating tones
+        const x0 = 62 + i * 7.4 + rnd() * 3, tip = 16 + rnd() * 10;
+        strand(x0, 33, x0 + (rnd() - 0.5) * 14, tip, i % 3 === 0 ? lite : dark, 1.8, (rnd() - 0.5) * 10);
+      }
+      g.fillStyle = 'rgba(255,235,200,0.10)'; // sun catch on the crown
+      g.beginPath(); g.ellipse(cx - 16, 16, 46, 12, -0.1, 0, TAU); g.fill();
     }
   }
 
+  // ---- eyebrows: base arc + hair flicks ----
+  const BROW = HAIR || '#5a3a20';
   for (const sx of [-1, 1]) {
     const ex = cx + sx * 17;
-    if (charIdx === 2) continue; // Marlon's eyes are behind sunglasses
-    g.fillStyle = '#fff';
-    g.beginPath(); g.ellipse(ex, cy - 6, 11, 13, 0, 0, TAU); g.fill();
-    g.fillStyle = charIdx >= 0 && charIdx <= 2 ? '#6d5a34' : '#1d2c48'; // hazel
-    g.beginPath(); g.ellipse(ex + sx * 2, cy - 4, 5.5, 7.5, 0, 0, TAU); g.fill();
-    g.fillStyle = '#241a10';
-    g.beginPath(); g.ellipse(ex + sx * 2, cy - 4, 2.6, 3.6, 0, 0, TAU); g.fill();
-    g.fillStyle = '#fff';
-    g.beginPath(); g.ellipse(ex + sx * 4, cy - 8, 2.2, 2.6, 0, 0, TAU); g.fill();
-    g.strokeStyle = HAIR || '#5a3a20'; g.lineWidth = 4; g.lineCap = 'round';
-    g.beginPath(); g.arc(ex, cy - 22, 11, Math.PI * 1.15, Math.PI * 1.85); g.stroke();
-    g.fillStyle = 'rgba(255,120,110,0.30)';
-    g.beginPath(); g.ellipse(cx + sx * 34, cy + 12, 8, 5, 0, 0, TAU); g.fill();
+    g.strokeStyle = BROW; g.lineWidth = 3.4; g.lineCap = 'round';
+    g.beginPath(); g.arc(ex, cy - 21, 11, Math.PI * 1.15, Math.PI * 1.85); g.stroke();
+    g.lineWidth = 1.2;
+    for (let i = 0; i < 7; i++) {
+      const a = Math.PI * (1.18 + i * 0.105);
+      const bx = ex + Math.cos(a) * 11, by = cy - 21 + Math.sin(a) * 11;
+      g.beginPath(); g.moveTo(bx, by + 1.5); g.lineTo(bx + sx * 1.5, by - 2.5); g.stroke();
+    }
   }
 
-  if (charIdx === 1) { // Alice: gold hexagonal glasses
-    g.strokeStyle = '#c8a44a'; g.lineWidth = 2.5; g.lineJoin = 'round';
+  // ---- eyes (Marlon's stay behind his sunglasses) ----
+  for (const sx of [-1, 1]) {
+    if (charIdx === 2) continue;
+    const ex = cx + sx * 17, ey = cy - 6;
+    g.fillStyle = 'rgba(135,85,55,0.18)'; // socket depth
+    g.beginPath(); g.ellipse(ex, ey - 2, 13.5, 15, 0, 0, TAU); g.fill();
+    g.fillStyle = '#fdf7ef';
+    g.beginPath(); g.ellipse(ex, ey, 11, 13, 0, 0, TAU); g.fill();
+    const lid = g.createLinearGradient(0, ey - 13, 0, ey - 2); // lid casts on the white
+    lid.addColorStop(0, 'rgba(120,85,60,0.35)');
+    lid.addColorStop(1, 'rgba(120,85,60,0)');
+    g.fillStyle = lid;
+    g.beginPath(); g.ellipse(ex, ey, 11, 13, 0, 0, TAU); g.fill();
+    const ix = ex + sx * 2, iy = ey + 2;
+    const iris = g.createRadialGradient(ix, iy, 1, ix, iy, 7.5);
+    if (kid) { // hazel
+      iris.addColorStop(0, '#9a7c42');
+      iris.addColorStop(0.55, '#75592b');
+      iris.addColorStop(1, '#463314');
+    } else {
+      iris.addColorStop(0, '#3a5688');
+      iris.addColorStop(1, '#16233f');
+    }
+    g.fillStyle = iris;
+    g.beginPath(); g.ellipse(ix, iy, 6, 7.5, 0, 0, TAU); g.fill();
+    g.strokeStyle = 'rgba(40,28,10,0.55)'; g.lineWidth = 0.8; // iris flecks
+    for (let i = 0; i < 9; i++) {
+      const a = rnd() * TAU;
+      g.beginPath(); g.moveTo(ix + Math.cos(a) * 2.2, iy + Math.sin(a) * 2.8);
+      g.lineTo(ix + Math.cos(a) * 5, iy + Math.sin(a) * 6.2); g.stroke();
+    }
+    g.fillStyle = '#17100a';
+    g.beginPath(); g.ellipse(ix, iy, 2.8, 3.6, 0, 0, TAU); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.95)';
+    g.beginPath(); g.ellipse(ix + 2.2, iy - 3.4, 2, 2.4, 0, 0, TAU); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.5)';
+    g.beginPath(); g.ellipse(ix - 2, iy + 2.6, 1.1, 1.3, 0, 0, TAU); g.fill();
+    g.strokeStyle = '#2a1a10'; g.lineWidth = 2.6; g.lineCap = 'round'; // lash line
+    g.beginPath(); g.arc(ex, ey + 2, 11.5, Math.PI * 1.08, Math.PI * 1.92); g.stroke();
+    g.lineWidth = 1.3;
+    for (let i = 0; i < 3; i++) { // outer lashes
+      const a = Math.PI * (sx > 0 ? 1.82 - i * 0.07 : 1.18 + i * 0.07);
+      const lx = ex + Math.cos(a) * 11.5, ly = ey + 2 + Math.sin(a) * 11.5;
+      g.beginPath(); g.moveTo(lx, ly); g.lineTo(lx + sx * 3, ly - 3); g.stroke();
+    }
+    g.strokeStyle = 'rgba(120,75,50,0.4)'; g.lineWidth = 1.2; // lower lid
+    g.beginPath(); g.arc(ex, ey - 3, 11.5, Math.PI * 0.2, Math.PI * 0.8); g.stroke();
+    g.strokeStyle = 'rgba(130,85,58,0.35)'; g.lineWidth = 1.4; // crease
+    g.beginPath(); g.arc(ex, ey + 4, 13.5, Math.PI * 1.2, Math.PI * 1.8); g.stroke();
+  }
+
+  // ---- nose: soft bridge shadow, tip light, nostrils ----
+  g.strokeStyle = 'rgba(150,95,60,0.14)'; g.lineWidth = 5; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(cx - 3, cy - 2); g.quadraticCurveTo(cx - 5, cy + 3, cx - 4, cy + 5); g.stroke();
+  g.fillStyle = 'rgba(255,240,220,0.35)';
+  g.beginPath(); g.ellipse(cx, cy + 4, 3.4, 2.4, 0, 0, TAU); g.fill();
+  g.fillStyle = 'rgba(105,58,35,0.38)';
+  g.beginPath(); g.ellipse(cx - 4.5, cy + 6.5, 1.5, 1.1, 0.4, 0, TAU); g.fill();
+  g.beginPath(); g.ellipse(cx + 4.5, cy + 6.5, 1.5, 1.1, -0.4, 0, TAU); g.fill();
+
+  // ---- glasses ----
+  if (charIdx === 1) { // Alice: gold hexagonal frames
     for (const sx of [-1, 1]) {
       const ex = cx + sx * 17;
-      g.beginPath();
-      for (let i = 0; i <= 6; i++) {
-        const a = i / 6 * TAU + Math.PI / 6;
-        const px = ex + Math.cos(a) * 15, py = cy - 6 + Math.sin(a) * 15;
-        i ? g.lineTo(px, py) : g.moveTo(px, py);
-      }
-      g.stroke();
-      g.fillStyle = 'rgba(255,220,220,0.14)';
-      g.fill();
+      const hex = (r) => {
+        g.beginPath();
+        for (let i = 0; i <= 6; i++) {
+          const a = i / 6 * TAU + Math.PI / 6;
+          const px = ex + Math.cos(a) * r, py = cy - 6 + Math.sin(a) * r;
+          i ? g.lineTo(px, py) : g.moveTo(px, py);
+        }
+      };
+      const lens = g.createLinearGradient(ex - 15, cy - 21, ex + 12, cy + 9); // glass
+      lens.addColorStop(0, 'rgba(225,238,255,0.22)');
+      lens.addColorStop(1, 'rgba(255,255,255,0.04)');
+      hex(15); g.fillStyle = lens; g.fill();
+      hex(15); g.strokeStyle = '#a9822f'; g.lineWidth = 3; g.lineJoin = 'round'; g.stroke();
+      hex(15); g.strokeStyle = '#eccf72'; g.lineWidth = 1.2; g.stroke(); // gold glint
+      g.strokeStyle = 'rgba(255,255,255,0.5)'; g.lineWidth = 2; // glare streak
+      g.beginPath(); g.moveTo(ex - 8, cy - 13); g.lineTo(ex - 1, cy - 4); g.stroke();
     }
-    g.beginPath(); g.moveTo(cx - 3, cy - 8); g.lineTo(cx + 3, cy - 8); g.stroke(); // bridge
+    g.strokeStyle = '#a9822f'; g.lineWidth = 2.6;
+    g.beginPath(); g.moveTo(cx - 3, cy - 8); g.lineTo(cx + 3, cy - 8); g.stroke();
+    g.beginPath(); g.moveTo(cx - 32, cy - 9); g.lineTo(cx - 44, cy - 12); g.stroke(); // temples
+    g.beginPath(); g.moveTo(cx + 32, cy - 9); g.lineTo(cx + 44, cy - 12); g.stroke();
   }
   if (charIdx === 2) { // Marlon: blue mirrored sunglasses
     for (const sx of [-1, 1]) {
       const ex = cx + sx * 17;
       const lg = g.createLinearGradient(ex - 14, cy - 18, ex + 14, cy + 6);
-      lg.addColorStop(0, '#57e6c8');
-      lg.addColorStop(0.5, '#2e9fe6');
-      lg.addColorStop(1, '#1c5fb8');
+      lg.addColorStop(0, '#66f0d0');
+      lg.addColorStop(0.45, '#2e9fe6');
+      lg.addColorStop(1, '#173f8f');
       g.fillStyle = lg;
       g.beginPath(); g.ellipse(ex, cy - 6, 15, 13, 0, 0, TAU); g.fill();
-      g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 3;
-      g.stroke();
-      g.fillStyle = 'rgba(255,255,255,0.45)';
-      g.beginPath(); g.ellipse(ex - 5, cy - 11, 5, 3, -0.5, 0, TAU); g.fill();
+      const sky = g.createLinearGradient(0, cy - 18, 0, cy - 2); // mirrored horizon
+      sky.addColorStop(0, 'rgba(255,255,255,0.55)');
+      sky.addColorStop(0.55, 'rgba(255,255,255,0.10)');
+      sky.addColorStop(0.56, 'rgba(20,40,80,0.25)');
+      sky.addColorStop(1, 'rgba(20,40,80,0)');
+      g.fillStyle = sky;
+      g.beginPath(); g.ellipse(ex, cy - 6, 15, 13, 0, 0, TAU); g.fill();
+      g.strokeStyle = '#20242c'; g.lineWidth = 3.4;
+      g.beginPath(); g.ellipse(ex, cy - 6, 15, 13, 0, 0, TAU); g.stroke();
+      g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = 1.2;
+      g.beginPath(); g.ellipse(ex, cy - 6, 13.4, 11.4, 0, Math.PI * 1.1, Math.PI * 1.9); g.stroke();
+      g.strokeStyle = 'rgba(255,255,255,0.7)'; g.lineWidth = 2.4; // diagonal glare
+      g.beginPath(); g.moveTo(ex - 9, cy - 14); g.lineTo(ex - 2, cy - 5); g.stroke();
     }
-    g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 3;
+    g.strokeStyle = '#20242c'; g.lineWidth = 3.4;
     g.beginPath(); g.moveTo(cx - 2, cy - 8); g.lineTo(cx + 2, cy - 8); g.stroke();
+    g.beginPath(); g.moveTo(cx - 32, cy - 9); g.lineTo(cx - 46, cy - 13); g.stroke();
+    g.beginPath(); g.moveTo(cx + 32, cy - 9); g.lineTo(cx + 46, cy - 13); g.stroke();
   }
-  if (charIdx === 1 || charIdx === 2) { // light freckles
-    g.fillStyle = 'rgba(150,100,60,0.35)';
-    for (const [fx, fy] of [[-28, 16], [-22, 20], [-32, 22], [28, 16], [23, 21], [33, 22]])
-      g.fillRect(cx + fx, cy + fy, 2, 2);
+
+  // ---- freckles (Alice a constellation, Marlon a dusting) ----
+  if (charIdx === 1 || charIdx === 2) {
+    const n = charIdx === 1 ? 16 : 8;
+    for (let i = 0; i < n; i++) {
+      const fx = (rnd() - 0.5) * 76, fy = 12 + rnd() * 13;
+      if (Math.abs(fx) < 10 && fy < 16) continue; // keep the nose tip clear
+      g.fillStyle = 'rgba(146,96,56,' + (0.22 + rnd() * 0.25).toFixed(2) + ')';
+      g.beginPath(); g.ellipse(cx + fx, cy + fy, 1 + rnd(), 0.8 + rnd() * 0.8, 0, 0, TAU); g.fill();
+    }
   }
-  // smile
-  g.strokeStyle = '#7a3a24'; g.lineWidth = 5; g.lineCap = 'round';
-  g.beginPath();
-  if (charIdx === 2) g.arc(cx, cy + 10, 14, Math.PI * 0.12, Math.PI * 0.88); // big grin
-  else g.arc(cx, cy + 12, 13, Math.PI * 0.15, Math.PI * 0.85);
-  g.stroke();
-  if (charIdx === 2) { // teeth
-    g.fillStyle = '#fff';
-    g.beginPath(); g.arc(cx, cy + 11, 11, Math.PI * 0.2, Math.PI * 0.8); g.fill();
+
+  // ---- blush ----
+  for (const sx of [-1, 1]) {
+    const bl = g.createRadialGradient(cx + sx * 34, cy + 13, 2, cx + sx * 34, cy + 13, 13);
+    bl.addColorStop(0, 'rgba(242,120,108,0.28)');
+    bl.addColorStop(1, 'rgba(242,120,108,0)');
+    g.fillStyle = bl; g.fillRect(0, 0, 256, 128);
   }
+
+  // ---- mouth: real lips instead of a plain stroke ----
+  const my = cy + 15;
+  if (charIdx === 2) { // Marlon: wide open grin
+    g.fillStyle = '#66261a';
+    g.beginPath(); g.arc(cx, my - 5, 15, Math.PI * 0.08, Math.PI * 0.92); g.closePath(); g.fill();
+    g.fillStyle = '#fff'; // teeth
+    g.beginPath(); g.arc(cx, my - 5.5, 13, Math.PI * 0.14, Math.PI * 0.86); g.lineTo(cx - 12, my - 1);
+    g.quadraticCurveTo(cx, my + 3, cx + 12, my - 1); g.closePath(); g.fill();
+    g.strokeStyle = 'rgba(160,140,120,0.5)'; g.lineWidth = 0.8;
+    for (let i = -2; i <= 2; i++) { g.beginPath(); g.moveTo(cx + i * 5, my - 1); g.lineTo(cx + i * 5, my + 2.5); g.stroke(); }
+    g.fillStyle = '#c95f52'; // tongue hint
+    g.beginPath(); g.ellipse(cx, my + 6, 8, 3.5, 0, Math.PI, TAU); g.fill();
+    g.strokeStyle = '#7a3a24'; g.lineWidth = 2.4; g.lineCap = 'round';
+    g.beginPath(); g.arc(cx, my - 5, 15, Math.PI * 0.08, Math.PI * 0.92); g.stroke();
+  } else { // warm closed smile with real lips
+    g.strokeStyle = '#8a4534'; g.lineWidth = 2.6; g.lineCap = 'round';
+    g.beginPath(); g.arc(cx, my - 3, 13, Math.PI * 0.15, Math.PI * 0.85); g.stroke();
+    g.fillStyle = '#d47b6a'; // lower lip
+    g.beginPath();
+    g.moveTo(cx - 11.5, my + 1.5);
+    g.quadraticCurveTo(cx, my + 9.5, cx + 11.5, my + 1.5);
+    g.quadraticCurveTo(cx, my + 4.5, cx - 11.5, my + 1.5);
+    g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.35)'; // lip gloss
+    g.beginPath(); g.ellipse(cx, my + 4.6, 5, 1.4, 0, 0, TAU); g.fill();
+    g.strokeStyle = 'rgba(122,58,36,0.5)'; g.lineWidth = 1.4; // smile corners
+    for (const sx of [-1, 1]) {
+      g.beginPath(); g.moveTo(cx + sx * 12, my); g.lineTo(cx + sx * 14.5, my - 2); g.stroke();
+    }
+  }
+
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
@@ -2664,12 +2830,16 @@ function updateKart(k, dt) {
 
   const cc = center[ni];
   const dc = Math.hypot(cc.x - k.x, cc.y - k.y);
-  if (offroad && dc > 300) {
+  // Lakitu-style rescue: 3s off the road (1.4s when really lost) puts the
+  // kart back on the centerline. A star pardons the grass shortcut.
+  if (offroad && k.starT <= 0) {
     k.offroadT += dt;
-    if (k.offroadT > 1.4) {
+    if (k.offroadT > 3 || (dc > 300 && k.offroadT > 1.4)) {
       k.x = cc.x; k.y = cc.y;
       k.angle = Math.atan2(cc.diry, cc.dirx);
       k.speed = 0; k.offroadT = 0;
+      k.visY = undefined; // snap straight onto the road surface
+      if (k.isPlayer) beep(520, 0.2, 'triangle', 260);
     }
   } else k.offroadT = 0;
 
@@ -3096,6 +3266,11 @@ function drawCoinIcon(x, y, s = 1) {
 }
 
 function drawHUD() {
+  if (player.offroadT > 1.2 && state === 'race') {
+    // rescue incoming — pulse a warning so the teleport isn't a surprise
+    const blink = Math.sin(perfNow * 0.012) > -0.3;
+    if (blink) text('⤺ RETOUR SUR LA PISTE…', HW / 2, OY + HH - 96, 15, 'center', '#ffd23e');
+  }
   if (player.boostT > 0) {
     hctx.save();
     hctx.strokeStyle = 'rgba(255,255,255,0.5)';
@@ -3576,6 +3751,7 @@ window.IAM = {
   get vehSel() { return vehSel; },
   get colorSel() { return colorSel; },
   get track() { return track; },
+  get center() { return center; },
   get kartMeshes() { return kartMeshes; },
   setVeh(v) { uiQueue.push({ t: 'veh', d: v - vehSel }); },
   makePlayerAI() { if (player) player.isPlayer = false; },

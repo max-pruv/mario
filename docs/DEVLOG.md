@@ -10,6 +10,8 @@ Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker
 - **Fini le kart enterré hors piste** : le sol visible est un mélange progressif entre le bord de route et le terrain brut ; le kart utilisait le terrain brut et passait sous le décor (visible à New York). Nouvelle fonction `groundYAt(x, z)` qui reproduit exactement la formule du mesh du sol — le kart roule maintenant *sur* ce qu'on voit.
 - **Survol des circuits fluide** : la caméra de présentation interpole entre les échantillons du tracé au lieu de sauter d'un point à l'autre (fini les saccades).
 - **Minimap déplacée en portrait** : en haut à droite, elle ne chevauche plus le bouton A.
+- **Sauvetage automatique façon Lakitu** : hors piste plus de 3 secondes (1,4 s si vraiment perdu) → le kart est replacé sur la piste, avec avertissement clignotant « ⤺ RETOUR SUR LA PISTE… » et bip. L'étoile autorise toujours les raccourcis dans l'herbe.
+- **Portraits beaucoup plus réalistes** (toujours 100 % dessinés en code, aucune photo publiée) : texture 512×256, peau modelée par dégradés (lumière, pommettes, menton), iris noisette à stries et double reflet, cils et sourcils poil à poil, vraies lèvres avec brillance, nez ombré, mèches de cheveux en 3 tons (ondulées Inès, raides brillantes Alice, épis Marlon), verres de lunettes avec reflets (hexagones dorés d'Alice, effet miroir bleu de Marlon), taches de rousseur en constellation.
 
 ## v19 — Avatars Inès · Alice · Marlon + gyro par défaut
 

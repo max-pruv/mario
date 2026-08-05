@@ -335,7 +335,8 @@ glCanvas.addEventListener('pointerup', (e) => {
     const y = (start.cy - r.top) / r.height * HB;
     const hit = hudRegions.find(rg => x >= rg.x && x <= rg.x + rg.w && y >= rg.y && y <= rg.y + rg.h);
     if (hit) { uiQueue.push(hit.action); return; }
-    tapStart = true; // latched so a quick tap is never missed between frames
+    // tap-anywhere only means "continue" where nothing can be mis-picked
+    if (state === 'title' || state === 'finish') tapStart = true;
     return;
   }
   // swipe
@@ -2968,12 +2969,29 @@ function showNameOverlay() {
   renderChips(nameInput.value);
   nameOverlay.hidden = false;
 }
+let nameMode = 'record';
+function applyRename(v) {
+  const clean = (v || '').trim().slice(0, 10);
+  try { localStorage.setItem('iam-lastname', clean); } catch (e) {}
+  net.myName = clean;
+  nameOverlay.hidden = true;
+  nameMode = 'record';
+  if (net.active) {
+    if (net.isHost) hostRosterChanged();
+    else if (state === 'mp-wait') netSend({ t: 'ready', veh: vehSel, color: COLOR_PALETTE[colorSel], char: menuChar, name: myDisplayName() });
+  }
+  beep(660, 0.08, 'square');
+}
 if (nameOverlay) {
   document.getElementById('name-save').addEventListener('click', () => {
+    if (nameMode === 'rename') return applyRename(nameInput.value);
     try { localStorage.setItem('iam-lastname', nameInput.value.trim()); } catch (e) {}
     commitRecord(nameInput.value);
   });
-  document.getElementById('name-skip').addEventListener('click', () => commitRecord(null));
+  document.getElementById('name-skip').addEventListener('click', () => {
+    if (nameMode === 'rename') { nameOverlay.hidden = true; nameMode = 'record'; return; }
+    commitRecord(null);
+  });
   nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') commitRecord(nameInput.value); });
   nameInput.addEventListener('input', () => renderChips(nameInput.value)); // autocomplete
 }
@@ -3150,7 +3168,7 @@ const net = {
   conn: null,           // guest: my link to the host
   conns: [],            // host: live guest links (each carries _pinfo)
   code: '', joinCode: '', status: '', error: '',
-  myChar: 0,
+  myChar: 0, myName: '',
   hostReady: false, locked: false,
   roster: [],           // display copy: [{c, veh, color, ready, me}]
   seats: null,          // final assignments at GO: [{c, veh, color}]
@@ -3179,6 +3197,11 @@ function netRelay(msg, except) {
     if (c === except || !c.open) continue;
     try { c.send(msg); } catch (e) {}
   }
+}
+
+function myDisplayName() {
+  if (!net.myName) { try { net.myName = (localStorage.getItem('iam-lastname') || '').trim().slice(0, 10); } catch (e) {} }
+  return net.myName || CHARACTERS[menuChar].name;
 }
 
 function netGuestCount() { return net.isHost ? net.conns.filter((c) => c.open).length : 0; }
@@ -3331,10 +3354,10 @@ function hostDropConn(c) {
 
 function hostRosterChanged() {
   if (!net.isHost) return;
-  const ps = [{ c: menuChar, veh: vehSel, color: COLOR_PALETTE[colorSel], ready: net.hostReady, host: true }];
+  const ps = [{ c: menuChar, veh: vehSel, color: COLOR_PALETTE[colorSel], ready: net.hostReady, host: true, name: myDisplayName() }];
   for (const c of net.conns) {
     if (!c.open || !c._pinfo) continue;
-    ps.push({ c: c._pinfo.char, veh: c._pinfo.veh, color: c._pinfo.color, ready: c._pinfo.ready });
+    ps.push({ c: c._pinfo.char, veh: c._pinfo.veh, color: c._pinfo.color, ready: c._pinfo.ready, name: c._pinfo.name || '' });
   }
   net.roster = ps.map((p2) => Object.assign({}, p2, { me: !!p2.host }));
   netSend({ t: 'roster', ps });
@@ -3444,17 +3467,17 @@ function netLaunchRace() {
   // seat assignment: host first, then guests in join order; clashes shift to a free char
   const taken = new Set();
   const seats = [];
-  const grab = (want, veh, color) => {
+  const grab = (want, veh, color, name) => {
     let c2 = clamp(want | 0, 0, CHARACTERS.length - 1);
     while (taken.has(c2)) c2 = (c2 + 1) % CHARACTERS.length;
     taken.add(c2);
-    seats.push({ c: c2, veh, color });
+    seats.push({ c: c2, veh, color, name: name || '' });
     return c2;
   };
-  grab(menuChar, vehSel, COLOR_PALETTE[colorSel]);
+  grab(menuChar, vehSel, COLOR_PALETTE[colorSel], myDisplayName());
   for (const c of net.conns) {
     if (!c.open || !c._pinfo) continue;
-    c._pinfo.char = grab(c._pinfo.char, c._pinfo.veh, c._pinfo.color);
+    c._pinfo.char = grab(c._pinfo.char, c._pinfo.veh, c._pinfo.color, c._pinfo.name);
   }
   net.seats = seats;
   for (const c of net.conns) {
@@ -3482,6 +3505,7 @@ function duoResetRace() {
     const k = karts.find((q) => q.charIdx === s.c);
     if (!k) return;
     k.humanNo = i + 1;
+    k.playerName = s.name || '';
     if (s.c === net.myChar) { k.isPlayer = true; player = k; }
     else { k.netDriven = true; k.isRemotePlayer = true; }
   });
@@ -3528,6 +3552,7 @@ function netOnData(m, fromConn) {
         char: clamp(m.char | 0, 0, CHARACTERS.length - 1),
         veh: clamp(m.veh | 0, 0, VEHICLES.length - 1),
         color: typeof m.color === 'string' ? m.color : null,
+        name: typeof m.name === 'string' ? m.name.slice(0, 10) : '',
         ready: true,
       };
       hostRosterChanged();
@@ -3537,7 +3562,7 @@ function netOnData(m, fromConn) {
     if (!net.isHost && Array.isArray(m.ps)) {
       net.roster = m.ps.map((p2) => ({
         c: p2.c | 0, veh: p2.veh | 0, color: typeof p2.color === 'string' ? p2.color : null,
-        ready: !!p2.ready, me: false,
+        ready: !!p2.ready, me: false, name: typeof p2.name === 'string' ? p2.name.slice(0, 10) : '',
       }));
       ensureKartMeshes();
     }
@@ -3552,6 +3577,7 @@ function netOnData(m, fromConn) {
         c: clamp(s.c | 0, 0, CHARACTERS.length - 1),
         veh: clamp(s.veh | 0, 0, VEHICLES.length - 1),
         color: typeof s.color === 'string' ? s.color : null,
+        name: typeof s.name === 'string' ? s.name.slice(0, 10) : '',
       })) : [];
       duoStartRace();
     }
@@ -4457,7 +4483,7 @@ function drawHUD() {
     const humans = humanRank().list;
     let ly = HB > HW ? mmY + 96 : mmY - 14 - humans.length * 12;
     humans.forEach((k, hi) => {
-      const label = `${hi + 1}ᵉ ${k.isPlayer ? 'Toi' : CHARACTERS[k.charIdx].name}`;
+      const label = `${hi + 1}ᵉ ${k.isPlayer ? 'Toi' : (k.playerName || CHARACTERS[k.charIdx].name)}`;
       text(label, HW - 52, ly, 10, 'center', k.isPlayer ? '#fff' : '#ffd24a');
       ly += 12;
     });
@@ -4567,11 +4593,22 @@ function mpButton(y, label, act) {
   hitR(x - 8, y - 6, w + 16, h + 12, act);
 }
 
+function drawNameChip() {
+  const label = `✏️ ${myDisplayName()}`;
+  const w = Math.max(110, label.length * 8 + 30), h = 34, x = HW - w - 10, y = MY(8);
+  hctx.fillStyle = 'rgba(20,20,55,0.85)';
+  hctx.strokeStyle = 'rgba(255,210,74,0.7)'; hctx.lineWidth = 1.5;
+  hctx.beginPath(); hctx.roundRect(x, y, w, h, 14); hctx.fill(); hctx.stroke();
+  text(label, x + w / 2, y + 10, 12, 'center', '#ffd24a');
+  hitR(x - 8, y - 8, w + 16, h + 16, { t: 'rename' });
+}
+
 function drawMpMenu() {
   hctx.fillStyle = 'rgba(8,5,25,0.5)';
   hctx.fillRect(0, 0, HW, HB);
   text('MULTIJOUEUR', HW / 2, MY(16), 26, 'center', '#40e0ff');
   text('De 2 à 8 joueurs — Wi-Fi ou 4G', HW / 2, MY(48), 12, 'center', '#9ab');
+  drawNameChip();
   mpButton(MY(84), 'CRÉER UNE PARTIE', { t: 'mp-create' });
   mpButton(MY(142), 'REJOINDRE AVEC UN CODE', { t: 'mp-goto-join' });
   if (net.error) text('⚠ ' + net.error, HW / 2, MY(202), 12, 'center', '#ff7c6a');
@@ -4581,6 +4618,7 @@ function drawMpMenu() {
 function drawMpHost() {
   hctx.fillStyle = 'rgba(8,5,25,0.6)';
   hctx.fillRect(0, 0, HW, HB);
+  drawNameChip();
   text('TON CODE DE PARTIE', HW / 2, MY(6), 20, 'center', '#40e0ff');
   text((net.code || '····').split('').join('  '), HW / 2, MY(34), 52, 'center', '#ffd24a');
   text('Donne ce code aux autres joueurs (8 max)', HW / 2, MY(96), 13, 'center', '#fff');
@@ -4589,7 +4627,8 @@ function drawMpHost() {
   for (let i = 0; i < n; i++) {
     const c = net.conns.filter((q) => q.open)[i];
     const ok = c && c._pinfo && c._pinfo.ready;
-    text(`Joueur ${i + 2} ${ok ? '✓ prêt' : '— connecté'}`, HW / 2, MY(140 + i * 16), 12, 'center', ok ? '#6ede3a' : '#ffd24a');
+    const nm = (c && c._pinfo && c._pinfo.name) ? c._pinfo.name : `Joueur ${i + 2}`;
+    text(`${nm} ${ok ? '✓ prêt' : '— connecté'}`, HW / 2, MY(140 + i * 16), 12, 'center', ok ? '#6ede3a' : '#ffd24a');
   }
   if (n > 0) {
     mpButton(MY(196), `ON EST AU COMPLET (${n + 1} joueurs) ▶`, { t: 'mp-complete' });
@@ -4636,6 +4675,7 @@ function drawMpWait() {
   hctx.fillStyle = 'rgba(8,5,25,0.5)';
   hctx.fillRect(0, 0, HW, HB);
   const dots = '.'.repeat(1 + ((perfNow / 400) | 0) % 3);
+  drawNameChip();
   text('PRÊT !', HW / 2, MY(60), 26, 'center', '#6ede3a');
   if (net.roster.length) text(`${net.roster.length} joueur${net.roster.length > 1 ? 's' : ''} dans la partie`, HW / 2, MY(84), 12, 'center', '#9fe');
   text("L'hôte choisit le circuit" + dots, HW / 2, MY(110), 16, 'center', '#fff');
@@ -4664,13 +4704,15 @@ function drawCcSelect() {
 function drawCharSelect() {
   // no dark overlay: the 3D vehicle close-up IS the star of this screen
   stepHeader(2, 'CHOISIS TON VÉHICULE');
-  text('◀', HW / 2 - 130, MY(130), 34, 'center', '#fff');
-  text('▶', HW / 2 + 130, MY(130), 34, 'center', '#fff');
-  hitR(HW / 2 - 180, MY(90), 100, 110, { t: 'nav', d: -1 });
-  hitR(HW / 2 + 80, MY(90), 100, 110, { t: 'nav', d: 1 });
-  namePlate(MY(56), 250, 44);
-  text(VEHICLES[vehSel], HW / 2, MY(62), 28, 'center', '#ffd24a');
-  text(`${vehSel + 1} / ${VEHICLES.length}`, HW / 2, MY(96), 11, 'center', '#9ab');
+  const ny = MY(60);
+  namePlate(ny - 12, 250, 46);
+  text(VEHICLES[vehSel], HW / 2, ny, 28, 'center', '#ffd24a');
+  text(`${vehSel + 1} / ${VEHICLES.length}`, HW / 2, ny + 40, 11, 'center', '#9ab');
+  const ay = MY(132);
+  text('◀', HW / 2 - 130, ay, 34, 'center', '#fff');
+  text('▶', HW / 2 + 130, ay, 34, 'center', '#fff');
+  hitR(HW / 2 - 185, ay - 30, 110, 100, { t: 'nav', d: -1 });
+  hitR(HW / 2 + 75, ay - 30, 110, 100, { t: 'nav', d: 1 });
   text('← glisse pour changer →', HW / 2, MY(232), 11, 'center', '#8ac');
   drawGoButton('CONTINUER ▶');
 }
@@ -4694,25 +4736,28 @@ function drawColorSelect() {
       hctx.beginPath(); hctx.roundRect(x - 3, y - 3, sw + 6, sw + 6, 12); hctx.stroke();
     }
   });
-  text('◀', HW / 2 - 130, MY(120), 34, 'center', '#fff');
-  text('▶', HW / 2 + 130, MY(120), 34, 'center', '#fff');
-  hitR(HW / 2 - 180, MY(90), 100, 100, { t: 'nav', d: -1 });
-  hitR(HW / 2 + 80, MY(90), 100, 100, { t: 'nav', d: 1 });
+  const cay = MY(120);
+  text('◀', HW / 2 - 130, cay, 34, 'center', '#fff');
+  text('▶', HW / 2 + 130, cay, 34, 'center', '#fff');
+  hitR(HW / 2 - 185, cay - 30, 110, 100, { t: 'nav', d: -1 });
+  hitR(HW / 2 + 75, cay - 30, 110, 100, { t: 'nav', d: 1 });
   drawGoButton('CONTINUER ▶');
 }
 
 function drawPilotSelect() {
   stepHeader(4, 'CHOISIS TON PILOTE');
   const ch = CHARACTERS[menuChar];
-  namePlate(MY(56), 250, 44);
-  text(ch.name.toUpperCase(), HW / 2, MY(62), 28, 'center', '#ffd24a');
-  if (menuChar <= 2) text('⭐ un vrai pilote IAM !', HW / 2, MY(96), 12, 'center', '#ff50dc');
-  else text('un rival', HW / 2, MY(96), 12, 'center', '#9ab');
-  text('◀', HW / 2 - 130, MY(130), 34, 'center', '#fff');
-  text('▶', HW / 2 + 130, MY(130), 34, 'center', '#fff');
-  hitR(HW / 2 - 180, MY(90), 100, 110, { t: 'nav', d: -1 });
-  hitR(HW / 2 + 80, MY(90), 100, 110, { t: 'nav', d: 1 });
-  text(`${menuChar + 1} / ${CHARACTERS.length}`, HW / 2, MY(160), 11, 'center', '#9ab');
+  const pny = MY(60);
+  namePlate(pny - 12, 250, 46);
+  text(ch.name.toUpperCase(), HW / 2, pny, 28, 'center', '#ffd24a');
+  if (menuChar <= 2) text('⭐ un vrai pilote IAM !', HW / 2, pny + 38, 12, 'center', '#ff50dc');
+  else text('un rival', HW / 2, pny + 38, 12, 'center', '#9ab');
+  const pay = MY(132);
+  text('◀', HW / 2 - 130, pay, 34, 'center', '#fff');
+  text('▶', HW / 2 + 130, pay, 34, 'center', '#fff');
+  hitR(HW / 2 - 185, pay - 30, 110, 100, { t: 'nav', d: -1 });
+  hitR(HW / 2 + 75, pay - 30, 110, 100, { t: 'nav', d: 1 });
+  text(`${menuChar + 1} / ${CHARACTERS.length}`, HW / 2, pay + 46, 11, 'center', '#9ab');
   if (net.active && net.roster.length > 1) {
     const others = net.roster.filter((p) => p.c !== menuChar && p.c >= 0)
       .map((p) => CHARACTERS[p.c].name).join(' · ');
@@ -4728,15 +4773,17 @@ function drawMapSelect() {
   hctx.fillRect(0, 0, HW, HB);
   stepHeader(5, 'CHOISIS TON CIRCUIT');
   const map = MAPS[mapSel];
-  text('◀', HW / 2 - 150, MY(110), 30, 'center', '#fff');
-  text('▶', HW / 2 + 150, MY(110), 30, 'center', '#fff');
-  hitR(HW / 2 - 195, MY(80), 90, 100, { t: 'nav', d: -1 });
-  hitR(HW / 2 + 105, MY(80), 90, 100, { t: 'nav', d: 1 });
-  namePlate(MY(52), 270, 44);
-  text(map.name.toUpperCase(), HW / 2, MY(58), 28, 'center', '#ffd24a');
-  text(map.desc, HW / 2, MY(92), 12, 'center', '#cfe');
+  const mny = MY(56);
+  namePlate(mny - 12, 270, 46);
+  text(map.name.toUpperCase(), HW / 2, mny, 28, 'center', '#ffd24a');
+  text(map.desc, HW / 2, mny + 38, 12, 'center', '#cfe');
+  const may = MY(128);
+  text('◀', HW / 2 - 150, may, 30, 'center', '#fff');
+  text('▶', HW / 2 + 150, may, 30, 'center', '#fff');
+  hitR(HW / 2 - 195, may - 30, 100, 100, { t: 'nav', d: -1 });
+  hitR(HW / 2 + 105, may - 30, 100, 100, { t: 'nav', d: 1 });
   hctx.globalAlpha = 0.95;
-  hctx.drawImage(track.miniCanvas, HW / 2 - 44, MY(112), 88, 88);
+  hctx.drawImage(track.miniCanvas, HW / 2 - 44, may + 28, 88, 88);
   hctx.globalAlpha = 1;
   // best local record for the chosen cc
   const recs = recordsFor(map.id, ccSel);
@@ -4794,7 +4841,7 @@ function drawFinish() {
     const big = net.active;
     const y = OY + (big ? 70 : 58) + i * (big ? 34 : 22);
     text(PLACE_TXT[place], HW / 2 - 130, y, big ? 20 : 14, 'left', PLACE_COL[place]);
-    text((k.isPlayer ? ch.name + '  ★ toi' : big ? ch.name + `  (J${k.humanNo || 2})` : kartName(k)), HW / 2 - 70, y, big ? 18 : 14, 'left', k.isPlayer ? '#fff' : ch.color);
+    text((k.isPlayer ? (net.active ? myDisplayName() : ch.name) + '  ★ toi' : big ? (k.playerName || ch.name) + `  (J${k.humanNo || 2})` : kartName(k)), HW / 2 - 70, y, big ? 18 : 14, 'left', k.isPlayer ? '#fff' : ch.color);
     if (k.finishTime) text(fmtTime(k.finishTime), HW / 2 + 130, y, big ? 16 : 12, 'right', '#cfe');
     else if (big) text('en course…', HW / 2 + 130, y, 12, 'right', '#9ab');
   });
@@ -4914,6 +4961,13 @@ function frame(t) {
       resetRace(menuChar);
       beep(360, 0.1, 'square');
     } else if (a.t === 'rematch') { duoRematch();
+    } else if (a.t === 'rename') {
+      nameMode = 'rename';
+      if (nameOverlay) {
+        try { nameInput.value = myDisplayName(); } catch (e) {}
+        renderChips(nameInput.value);
+        nameOverlay.hidden = false;
+      }
     } else if (a.t === 'pilot') {
       menuChar = (menuChar + CHARACTERS.length + a.d) % CHARACTERS.length;
       if (net.active) net.myChar = menuChar;
@@ -4993,7 +5047,7 @@ function frame(t) {
       if (net.active) {
         if (net.isHost) { net.hostReady = true; hostRosterChanged(); state = 'map'; }
         else {
-          netSend({ t: 'ready', veh: vehSel, color: COLOR_PALETTE[colorSel], char: menuChar });
+          netSend({ t: 'ready', veh: vehSel, color: COLOR_PALETTE[colorSel], char: menuChar, name: myDisplayName() });
           state = 'mp-wait';
         }
       } else state = 'map';

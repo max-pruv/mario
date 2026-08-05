@@ -2,6 +2,13 @@
 
 Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker (`sw.js`) : chaque bump déclenche la mise à jour automatique de tous les clients installés.
 
+## v22 — Conduite précise, kart à plat sur la piste
+
+- **Les 4 roues toujours au sol** : l'orientation du kart est désormais calculée à partir de la **vraie normale de la surface** (devers + pente combinés, projetés sur le cap réel du kart). Fini la voiture penchée n'importe comment dans les virages relevés ou lors des bousculades — elle épouse la route quelle que soit sa direction.
+- **Direction plus précise** : zone morte + courbe progressive sur le joystick et le gyroscope (petits mouvements de pouce = micro-corrections, extrémités = braquage complet).
+- **Stable à haute vitesse** : le braquage est automatiquement adouci de ~30 % à pleine vitesse — plus de zigzag nerveux en ligne droite.
+- **Moins d'effet « crabe »** : la caméra suit le cap ~60 % plus vite, la voiture reste visuellement dans l'axe quand on tourne ; réponse visuelle du braquage accélérée.
+
 ## v21 — Multijoueur : deux enfants, deux téléphones, un code
 
 - **Mode « À DEUX EN LIGNE » sur l'écran titre** : pair-à-pair WebRTC (PeerJS vendoré, annuaire cloud gratuit uniquement pour se trouver — le jeu circule ensuite en direct entre les deux téléphones, Wi-Fi ou 4G).

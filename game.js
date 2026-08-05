@@ -292,11 +292,20 @@ if (autoBtn) autoBtn.addEventListener('click', () => {
 });
 updateAutoBtn();
 
+// deadzone + expo curve: small thumb moves = fine corrections, edges = full lock
+function shapeSteer(v) {
+  const DEAD = 0.09;
+  const a = Math.abs(v);
+  if (a < DEAD) return 0;
+  const t = Math.min(1, (a - DEAD) / (1 - DEAD));
+  return Math.sign(v) * Math.pow(t, 1.6);
+}
+
 function getPlayerSteer() {
   const kb = (input.right ? 1 : 0) - (input.left ? 1 : 0);
   if (kb) return kb;
-  if (joy.active) return joy.value;
-  if (gyro.enabled) return gyro.steer;
+  if (joy.active) return shapeSteer(joy.value);
+  if (gyro.enabled) return shapeSteer(gyro.steer);
   return 0;
 }
 
@@ -3152,8 +3161,9 @@ function updateKart(k, dt) {
   if (k.starT > 0) k.starT -= dt;
 
   const grip = clamp(k.speed / 70, 0, 1);
-  k.angle += steer * TURNRATE * grip * dt;
-  k.steerVis = lerp(k.steerVis, steer, Math.min(1, dt * 10));
+  const hiSpd = 1 - 0.32 * clamp(k.speed / BOOSTSPEED, 0, 1); // stable at speed
+  k.angle += steer * TURNRATE * grip * hiSpd * dt;
+  k.steerVis = lerp(k.steerVis, steer, Math.min(1, dt * 14));
 
   if (k.isPlayer) {
     const sDir = Math.abs(steer) > 0.3 ? Math.sign(steer) : 0;
@@ -3316,6 +3326,8 @@ function updatePlaces() {
 }
 
 /* ---------------- Mesh sync & world FX ---------------- */
+const _kb = { m4: new THREE.Matrix4(), q: new THREE.Quaternion(), vf: new THREE.Vector3(), vn: new THREE.Vector3(), vr: new THREE.Vector3() };
+
 function syncKartMeshes(dt) {
   for (const k of karts) {
     const m = kartMeshes[k.charIdx];
@@ -3327,10 +3339,33 @@ function syncKartMeshes(dt) {
     k.visY = lerp(k.visY, targetY, Math.min(1, dt * 10));
     m.group.visible = true;
     m.group.position.set(k.x, k.visY, k.y);
-    m.group.rotation.y = -(k.angle + k.spinAng);
-    // lean into turns + follow the road camber and slope
-    m.chassis.rotation.x = k.steerVis * 0.10 - (onRoad ? c.bank : 0);
-    m.chassis.rotation.z = clamp(k.speed * 0.0004, 0, 0.1) - (k.boostT > 0 ? 0.06 : 0) + (onRoad ? Math.atan(c.slope) * 0.8 : 0);
+    // full 3D orientation from the road surface normal: the kart sits flat on
+    // banking and slopes for ANY heading (no more tipped-over karts sideways)
+    let nx3 = 0, ny3 = 1, nz3 = 0;
+    if (onRoad) {
+      const t1x = c.dirx, t1y = c.slope, t1z = c.diry;      // along the track
+      const t2x = c.nx, t2y = -Math.sin(c.bank), t2z = c.ny; // across (banked)
+      nx3 = t2y * t1z - t2z * t1y;
+      ny3 = t2z * t1x - t2x * t1z;
+      nz3 = t2x * t1y - t2y * t1x;
+      const nl = Math.hypot(nx3, ny3, nz3) || 1;
+      nx3 /= nl; ny3 /= nl; nz3 /= nl;
+    }
+    const yaw = k.angle + k.spinAng;
+    const hx = Math.cos(yaw), hz = Math.sin(yaw);
+    const dpn = hx * nx3 + hz * nz3;
+    let fx3 = hx - dpn * nx3, fy3 = -dpn * ny3, fz3 = hz - dpn * nz3;
+    const fl = Math.hypot(fx3, fy3, fz3) || 1;
+    fx3 /= fl; fy3 /= fl; fz3 /= fl;
+    _kb.vf.set(fx3, fy3, fz3);
+    _kb.vn.set(nx3, ny3, nz3);
+    _kb.vr.crossVectors(_kb.vf, _kb.vn); // right-handed: X×Y=Z
+    _kb.m4.makeBasis(_kb.vf, _kb.vn, _kb.vr);
+    _kb.q.setFromRotationMatrix(_kb.m4);
+    m.group.quaternion.slerp(_kb.q, Math.min(1, dt * 12));
+    // chassis keeps only the playful lean + acceleration squat
+    m.chassis.rotation.x = k.steerVis * 0.10;
+    m.chassis.rotation.z = clamp(k.speed * 0.0004, 0, 0.1) - (k.boostT > 0 ? 0.06 : 0);
     m.chassis.position.y = m.hover
       ? 2.2 + Math.sin(perfNow * 0.004 + k.laneSeed * 7) * 1.1
       : Math.sin(perfNow * 0.02 + k.laneSeed * 7) * clamp(k.speed * 0.004, 0, 0.5); // hover or suspension
@@ -3551,7 +3586,7 @@ function updateCamera(dt) {
     sun.position.set(c.x + 300, 500, c.y + 120);
     sun.target.position.set(c.x, 0, c.y);
   } else {
-    camAngle += angDiff(camAngle, player.angle) * Math.min(1, dt * 7);
+    camAngle += angDiff(camAngle, player.angle) * Math.min(1, dt * 11);
     const fx = Math.cos(camAngle), fz = Math.sin(camAngle);
     const py = player.visY || 0;
     camera.position.set(player.x - fx * CAMBACK, py + CAMH, player.y - fz * CAMBACK);

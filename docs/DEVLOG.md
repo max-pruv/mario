@@ -16,6 +16,13 @@ Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker
 - Le micro se coupe proprement à la fin de la partie ou si la connexion tombe.
 - Testé de bout en bout : deux navigateurs à micros simulés, flux vocal reçu dans les deux sens, on/off propre — 7/7.
 
+## v35 — Multijoueur : connexion fiabilisée entre réseaux différents
+
+- **Serveurs relais TURN gratuits** ajoutés à la config WebRTC : les parties **4G ↔ Wi-Fi** passent maintenant à travers les NAT d'opérateurs (avant, seule la découverte marchait, le tunnel échouait sur certains réseaux).
+- **Chien de garde côté invité** : si la connexion au joueur n'aboutit pas en 14 s → message clair « Connexion impossible — re-tape le code pour réessayer » (fini l'écran qui tourne dans le vide).
+- **Chien de garde côté hôte** : si le code ne s'enregistre pas auprès de l'annuaire en 9 s → « Annuaire injoignable — vérifie ta connexion Internet ».
+- Statut visible « Connexion au joueur… » pendant l'établissement du tunnel.
+
 ## v34 — Animations MK8 : sauts, planeur, étincelles, lumières
 
 - **Rampes de saut** (2 tranches orange incandescentes par circuit) : décollage, **planeur delta à la couleur du kart**, cabrage/piqué selon la vitesse verticale, descente planée, **squash d'atterrissage** avec rebond d'amorti. L'IA saute aussi ; la hauteur de vol voyage en réseau.

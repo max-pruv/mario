@@ -137,6 +137,42 @@ const MAPS = [
       sea: { x: 1024 - 3050, z: 1024 - 300, w: 3600, h: 3600, color: 0x186098 },
     },
   },
+  {
+    id: 'cosmos', name: 'Odyssée Cosmique', desc: 'Une piste suspendue dans les étoiles',
+    ctrl: [
+      [300, 140], [620, 100], [880, 220], [910, 460], [800, 640],
+      [880, 830], [660, 920], [430, 860], [320, 940], [150, 860],
+      [110, 660], [230, 540], [140, 400], [130, 240],
+    ],
+    theme: {
+      sky: ['#020208', '#0a0a2a', '#1a1050', '#2a1466', '#12083a', '#050514'],
+      stars: 900, sun: { x: 780, y: 160, r: 46, color: '190,210,255' }, moon: true,
+      mountains: ['#181040', '#100a30'],
+      fog: 0x0c0a2c, fogNear: 1100, fogFar: 3600,
+      hemi: [0x6a6ae0, 0x1a1a4a, 0.9], sunL: [0xaac4ff, 1.9],
+      ground: '#1c1440', groundDots: ['#2a1e60', '#3a2a80', '#241a54', '#4a30a0'],
+      city: { count: 40, rMin: 1800, rVar: 800, hMin: 200, hVar: 420, glow: 1.6, style: 'modern', signs: 0.55 },
+      rails: 'neon', trees: 'sparse', landmark: null, sea: null, hills: 95, peaks: [0x241a5e, true],
+    },
+  },
+  {
+    id: 'acid', name: 'Vallée Psychédélique', desc: 'Couleurs folles et virages qui tournent la tête',
+    ctrl: [
+      [250, 160], [520, 90], [780, 170], [900, 340], [820, 500],
+      [900, 680], [740, 820], [560, 740], [430, 880], [240, 900],
+      [120, 740], [200, 560], [110, 420], [150, 250],
+    ],
+    theme: {
+      sky: ['#ff4fa3', '#ffb040', '#ffe95a', '#6ede8a', '#38c8ff', '#9040e0'],
+      stars: 0, sun: { x: 512, y: 210, r: 130, color: '255,120,220' }, moon: false,
+      mountains: ['#b04ab0', '#7a2a9a'],
+      fog: 0xd684d0, fogNear: 850, fogFar: 3200,
+      hemi: [0xffc0f0, 0x6a3a8a, 1.2], sunL: [0xffd0f0, 2.6],
+      ground: '#8a56c8', groundDots: ['#ff6ac0', '#ffd24a', '#40e0c0', '#b070ff'],
+      city: { count: 34, rMin: 1650, rVar: 600, hMin: 90, hVar: 220, glow: 1.4, style: 'modern', signs: 0.6 },
+      rails: 'neon', trees: 'round', landmark: null, sea: null, hills: 75, peaks: [0x8a3aa0, true],
+    },
+  },
 ];
 
 const RAIL_COLORS = {
@@ -4436,32 +4472,35 @@ function drawHUD() {
   text(CC_CLASSES[ccSel].label, 12, hudTop + 30, 11, 'left', '#9fe');
   text(`LAP ${clamp(player.lap, 1, LAPS)}/${LAPS}`, HW - 10, hudTop, 16, 'right');
   text(fmtTime(raceTime), HW - 10, hudTop + 20, 12, 'right', '#cfe');
-  // item slot — tap it (or press B) to fire
-  hctx.fillStyle = 'rgba(0,0,20,0.45)';
+  // item slot lives next to the accelerator — tap it (or press B) to fire
+  const isX = HW - 52, isY = HB > HW ? HB - 208 : HB - 172;
+  hctx.fillStyle = 'rgba(0,0,20,0.5)';
   hctx.strokeStyle = player.item ? '#ffd24a' : 'rgba(255,255,255,0.7)';
-  hctx.lineWidth = player.item ? 3 : 2;
-  hctx.beginPath(); hctx.roundRect(HW / 2 - 22, hudTop - 4, 44, 44, 8); hctx.fill(); hctx.stroke();
-  hitR(HW / 2 - 32, hudTop - 12, 64, 60, { t: 'useitem' });
+  hctx.lineWidth = player.item ? 3.5 : 2;
+  hctx.beginPath(); hctx.roundRect(isX - 26, isY - 4, 52, 52, 12); hctx.fill(); hctx.stroke();
+  hitR(isX - 38, isY - 14, 76, 72, { t: 'useitem' });
   if (player.rouletteT > 0) {
     const idx = Math.floor(perfNow / 90) % ROULETTE_ITEMS.length;
-    drawItemIcon(HW / 2, hudTop + 18, ROULETTE_ITEMS[idx], 1.55);
+    drawItemIcon(isX, isY + 22, ROULETTE_ITEMS[idx], 1.7);
   } else if (player.item) {
-    drawItemIcon(HW / 2, hudTop + 18, player.item, 1.55);
-    if (Math.sin(perfNow * 0.008) > 0) text('tape ici !', HW / 2, hudTop + 42, 8, 'center', '#ffd24a');
+    drawItemIcon(isX, isY + 22, player.item, 1.7);
+    if (Math.sin(perfNow * 0.008) > 0) text('tape !', isX, isY + 52, 9, 'center', '#ffd24a');
   }
   drawCoinIcon(18, HB - 20, 1.1);
   text(`× ${player.coins}`, 30, HB - 28, 15, 'left', '#ffd24a');
-  // restart + quit buttons
+  // exit (classic arrow, top right) then restart just below
   hctx.fillStyle = 'rgba(0,0,20,0.45)';
   hctx.strokeStyle = 'rgba(255,255,255,0.6)';
   hctx.lineWidth = 2;
-  hctx.beginPath(); hctx.arc(HW - 24, hudTop + 60, 14, 0, TAU); hctx.fill(); hctx.stroke();
-  text('↻', HW - 24, hudTop + 51, 17, 'center', '#fff');
-  hitR(HW - 46, hudTop + 38, 44, 44, { t: 'restart' });
+  hctx.beginPath(); hctx.arc(HW - 24, hudTop + 58, 14, 0, TAU); hctx.fill(); hctx.stroke();
+  text('➜', HW - 26, hudTop + 50, 14, 'center', '#fff');
+  hctx.fillStyle = '#fff';
+  hctx.fillRect(HW - 14.5, hudTop + 50, 2.5, 15); // the door frame
+  hitR(HW - 46, hudTop + 36, 44, 44, { t: 'quit' });
   hctx.fillStyle = 'rgba(0,0,20,0.45)';
-  hctx.beginPath(); hctx.arc(HW - 24, hudTop + 100, 14, 0, TAU); hctx.fill(); hctx.stroke();
-  text('🏠', HW - 24, hudTop + 92, 13, 'center', '#fff');
-  hitR(HW - 46, hudTop + 78, 44, 44, { t: 'quit' });
+  hctx.beginPath(); hctx.arc(HW - 24, hudTop + 98, 14, 0, TAU); hctx.fill(); hctx.stroke();
+  text('↻', HW - 24, hudTop + 89, 17, 'center', '#fff');
+  hitR(HW - 46, hudTop + 76, 44, 44, { t: 'restart' });
   hctx.globalAlpha = 0.9;
   const mmY = HB > HW ? hudTop + 126 : HB - 94; // portrait: under the buttons
   hctx.drawImage(track.miniCanvas, HW - 94, mmY);
@@ -4530,9 +4569,11 @@ function drawGoButton(label) {
 // menu layout: in portrait, stretch the 320-unit design band over the whole
 // screen (minus the bottom button zone) instead of centering it
 function MY(y) {
-  if (HB <= HW) return OY + y;
-  const top = hudTop, bottom = HB - 92;
-  return top + (y / 235) * Math.max(235, bottom - top);
+  // both orientations: the band starts below the DOM button bar and the
+  // 0..235 design span stretches over what remains
+  const top = Math.max(HB > HW ? hudTop : OY + 4, hudTop);
+  const bottom = HB - (HB > HW ? 92 : 64);
+  return top + (y / 235) * Math.max(200, bottom - top);
 }
 
 function headerVeil() {
@@ -4654,16 +4695,18 @@ function drawMpJoin() {
   // the keypad is a COMPACT block: only its anchor stretches with the screen,
   // never the spacing between its own keys (that's what kept breaking)
   const rows = [[1, 2, 3], [4, 5, 6], [7, 8, 9], ['⌫', 0, null]];
-  const padTop = Math.min(MY(96), HB - 100 - 4 * 62);
+  const padTop = MY(88);
+  const rowH = Math.max(34, Math.min(62, (HB - 56 - padTop) / 4));
+  const keyH = rowH - 10;
   rows.forEach((row, r) => {
     row.forEach((d, ci) => {
       if (d === null) return;
-      const x = HW / 2 - 128 + ci * 88, y = padTop + r * 62;
+      const x = HW / 2 - 128 + ci * 88, y = padTop + r * rowH;
       hctx.fillStyle = 'rgba(30,60,140,0.75)';
       hctx.strokeStyle = 'rgba(120,190,255,0.5)'; hctx.lineWidth = 1.5;
-      hctx.beginPath(); hctx.roundRect(x, y, 80, 48, 12); hctx.fill(); hctx.stroke();
-      text(String(d), x + 40, y + 12, 23, 'center', '#fff');
-      hitR(x - 4, y - 4, 88, 56, d === '⌫' ? { t: 'digit-del' } : { t: 'digit', d });
+      hctx.beginPath(); hctx.roundRect(x, y, 80, keyH, 12); hctx.fill(); hctx.stroke();
+      text(String(d), x + 40, y + keyH / 2 - 11, 23, 'center', '#fff');
+      hitR(x - 4, y - 4, 88, rowH + 4, d === '⌫' ? { t: 'digit-del' } : { t: 'digit', d });
     });
   });
   if (net.status) text(net.status + '.'.repeat(1 + ((perfNow / 400) | 0) % 3), HW / 2, HB - 40, 13, 'center', '#9fe');

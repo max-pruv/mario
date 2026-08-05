@@ -4551,7 +4551,7 @@ function drawTitle() {
     hctx.fillStyle = 'rgba(30,60,140,0.75)';
     hctx.strokeStyle = '#ff50dc'; hctx.lineWidth = 2;
     hctx.beginPath(); hctx.roundRect(x, y, w, h, 16); hctx.fill(); hctx.stroke();
-    text('À DEUX EN LIGNE 👥', HW / 2, y + 7, 14, 'center', '#fff');
+    text('MULTIJOUEUR EN LIGNE 👥', HW / 2, y + 7, 14, 'center', '#fff');
     hitR(x - 8, y - 6, w + 16, h + 12, { t: 'duo' });
   }
   if (!matchMedia('(pointer: coarse)').matches)
@@ -4570,8 +4570,8 @@ function mpButton(y, label, act) {
 function drawMpMenu() {
   hctx.fillStyle = 'rgba(8,5,25,0.5)';
   hctx.fillRect(0, 0, HW, HB);
-  text('JOUER À DEUX', HW / 2, MY(16), 26, 'center', '#40e0ff');
-  text('2 téléphones — Wi-Fi ou 4G', HW / 2, MY(48), 12, 'center', '#9ab');
+  text('MULTIJOUEUR', HW / 2, MY(16), 26, 'center', '#40e0ff');
+  text('De 2 à 8 joueurs — Wi-Fi ou 4G', HW / 2, MY(48), 12, 'center', '#9ab');
   mpButton(MY(84), 'CRÉER UNE PARTIE', { t: 'mp-create' });
   mpButton(MY(142), 'REJOINDRE AVEC UN CODE', { t: 'mp-goto-join' });
   if (net.error) text('⚠ ' + net.error, HW / 2, MY(202), 12, 'center', '#ff7c6a');

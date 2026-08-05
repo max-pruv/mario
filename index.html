@@ -43,6 +43,15 @@
   </div>
   <button id="btnAudio" aria-label="Couper ou activer le son">🔊</button>
 
+  <!-- Blocking update screen: get the new version before playing -->
+  <div id="update-overlay" hidden>
+    <div id="update-panel">
+      <div class="spin">🔄</div>
+      <p>Mise à jour du jeu…</p>
+      <small>Quelques secondes, la nouvelle version arrive !</small>
+    </div>
+  </div>
+
   <!-- Post-race name entry for the local leaderboard -->
   <div id="name-overlay" hidden>
     <div id="name-panel">
@@ -81,6 +90,20 @@
   // the next safe moment (menu or end of race) by reloading.
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     window.addEventListener('load', () => {
+      const updOverlay = document.getElementById('update-overlay');
+      const canBlock = () => {
+        const st = window.IAM ? window.IAM.state : 'title';
+        return st !== 'race' && st !== 'countdown';
+      };
+      const showUpdating = () => {
+        if (!canBlock() || !navigator.serviceWorker.controller) return;
+        window.__iamUpdating = true;
+        updOverlay.hidden = false;
+        // safety: never block more than 20s if the install stalls
+        setTimeout(() => {
+          if (window.__iamUpdating) { window.__iamUpdating = false; updOverlay.hidden = true; }
+        }, 20000);
+      };
       navigator.serviceWorker.register('./sw.js').then((reg) => {
         const check = () => reg.update().catch(() => {});
         check();
@@ -89,12 +112,15 @@
           if (!document.hidden) check();
         });
         window.addEventListener('focus', check);
+        if (reg.waiting) showUpdating(); // update already downloaded
+        reg.addEventListener('updatefound', showUpdating);
       }).catch(() => {});
 
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         // First install: a controller appears where there was none — no reload needed.
         if (!window.__iamHadController) { window.__iamHadController = true; return; }
-        window.__iamUpdateReady = true; // game.js reloads when it's safe
+        if (window.__iamUpdating) { location.reload(); return; } // loading screen -> reload now
+        window.__iamUpdateReady = true; // mid-race: game.js reloads when it's safe
       });
       window.__iamHadController = !!navigator.serviceWorker.controller;
     });

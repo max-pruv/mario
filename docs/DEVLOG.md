@@ -2,6 +2,14 @@
 
 Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker (`sw.js`) : chaque bump déclenche la mise à jour automatique de tous les clients installés.
 
+## v17 — Loading de mise à jour, portrait, véhicule unique, swipe, fix luminosité iOS
+
+- **Écran de chargement de mise à jour** : au lancement, si une nouvelle version est disponible, un écran « 🔄 Mise à jour du jeu… » bloque jusqu'à son installation puis recharge — on joue toujours sur la dernière version (garde-fou 20 s, jamais en pleine course).
+- **Portrait jouable** : l'overlay « tourne ton téléphone » est retiré, le jeu tourne dans les deux orientations (FOV adapté).
+- **Sélection simplifiée** : plus de choix de pilote/couleurs — l'étape 2 est un pur **choix de véhicule** (gros plan 3D, 6 formes).
+- **Swipe partout** : glisser horizontalement change de véhicule et de circuit, glisser verticalement change de cylindrée — en plus des taps et flèches.
+- **Fix luminosité iOS** : le pipeline bloom HDR rendait l'image laiteuse et surexposée sur iPhone — rendu direct (tone mapping natif + MSAA canvas) sur iOS, bloom conservé ailleurs.
+
 ## v16 — Autocomplétion des prénoms (anti-doublons)
 
 - En tapant les premières lettres dans la fenêtre de fin de course, les prénoms déjà connus (joueurs récents + tous les noms du leaderboard) s'affichent en suggestions tappables, filtrées en direct — insensible à la casse **et aux accents** (« ines » retrouve « Inès »).

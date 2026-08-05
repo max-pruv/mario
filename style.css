@@ -235,6 +235,24 @@ html, body {
   font: 500 12px/1.6 system-ui, sans-serif;
   color: #9ab4d0;
 }
-@media (pointer: coarse) and (orientation: portrait) {
-  #rotate-hint { display: block; }
+/* portrait is playable again — the overlay stays off */
+
+
+/* ---------- Update loading screen ---------- */
+#update-overlay {
+  position: fixed; inset: 0;
+  z-index: 80;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(6,6,20,.94);
+  color: #fff;
+  font-family: system-ui, sans-serif;
+  text-align: center;
 }
+#update-overlay[hidden] { display: none; }
+#update-panel p { font-size: 19px; font-weight: 800; margin: 12px 0 6px; }
+#update-panel small { color: #9ab4d0; }
+#update-panel .spin {
+  font-size: 42px;
+  animation: iam-spin 1.2s linear infinite;
+}
+@keyframes iam-spin { to { transform: rotate(360deg); } }

@@ -16,6 +16,12 @@ Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker
 - Le micro se coupe proprement à la fin de la partie ou si la connexion tombe.
 - Testé de bout en bout : deux navigateurs à micros simulés, flux vocal reçu dans les deux sens, on/off propre — 7/7.
 
+## v29 — Musique d'ambiance, finesse ×4, vraie pleine hauteur
+
+- **Musique d'ambiance procédurale** (séquenceur WebAudio embarqué, zéro fichier) : arpèges doux dans les menus (96 BPM), groove entraînant en course (132 BPM, basse + mélodie pentatonique + charley) — coupée par le bouton son, reprise propre.
+- **Finesse ×4** : rendu au quasi-natif des iPhone (pixel ratio plafonné à 2,5 au lieu de 1,75 — ~2× plus de pixels dans chaque direction), anisotropie des textures doublée (routes nettes jusqu'à l'horizon).
+- **Pleine hauteur** : `100dvh` sur la scène (zone de l'indicateur home comprise) et les menus descendent plus près du bouton bas.
+
 ## v28 — UI des menus : barre unifiée, cartes lisibles
 
 - **Barre du haut unifiée** : GYRO / son / AUTO deviennent des pilules de même hauteur dans une vraie rangée flex (plus de tailles disparates ni de positions au pixel), micro assorti à droite.

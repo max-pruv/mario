@@ -2,6 +2,16 @@
 
 Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker (`sw.js`) : chaque bump déclenche la mise à jour automatique de tous les clients installés.
 
+## v21 — Multijoueur : deux enfants, deux téléphones, un code
+
+- **Mode « À DEUX EN LIGNE » sur l'écran titre** : pair-à-pair WebRTC (PeerJS vendoré, annuaire cloud gratuit uniquement pour se trouver — le jeu circule ensuite en direct entre les deux téléphones, Wi-Fi ou 4G).
+- **Zéro friction** : l'hôte tape « Créer une partie » → un **code géant à 4 chiffres** s'affiche ; l'autre tape le code sur un pavé numérique → connectés. L'hôte choisit cylindrée + circuit, chacun choisit son véhicule et sa couleur (visibles l'un chez l'autre), départ synchronisé.
+- **Phase 1 — course partagée** : chaque téléphone simule son propre kart et envoie sa position 15×/s (interpolation + dead-reckoning en face) ; l'hôte simule les 6 karts IA et les diffuse 10×/s ; tours, classement et temps partagés.
+- **Phase 2 — objets et collisions** : carapaces, bananes et éclairs voyagent en événements réseau et existent sur les deux téléphones ; c'est toujours la simulation de la *victime* qui décide d'un tête-à-queue (pas de « je t'ai touché chez moi ») ; collisions kart-contre-kart symétriques, l'étoile renverse aussi l'adversaire.
+- **Phase 3 — confort** : bouton **REVANCHE 🔁** synchronisé à l'arrivée (Entrée relance les deux téléphones) ; si la connexion casse en course, bannière « reconnexion… » et retentatives pendant 15 s, puis **l'IA prend le volant du joueur disparu** et la course continue ; codes en collision régénérés automatiquement.
+- Testé de bout en bout en headless : 2 navigateurs + PeerServer local — connexion, course fantôme dans les deux sens, IA diffusées, objets croisés, revanche, déconnexion. 15/15.
+- Le solo est inchangé (suite v20 : 15/15, course IA complète OK).
+
 ## v20 — Couleur du véhicule, accélérateur auto, portrait plein écran
 
 - **Nouvelle étape 3/4 « Choisis ta couleur »** après le choix du véhicule : 8 teintes (rose, rouge, bleu, vert, jaune, violet, orange, blanc), navigables aux flèches ou d'un tap sur les pastilles, mémorisées (`iam-color`). Le véhicule du joueur est repeint en direct dans le garage et en course.

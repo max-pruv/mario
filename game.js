@@ -1210,8 +1210,10 @@ let kartMeshes = CHARACTERS.map((_, i) => buildKartMesh(i, i === 0 ? vehSel : DE
 // rebuild any kart whose vehicle should change (player picks vehSel, AI keep theirs)
 function ensureKartMeshes() {
   for (let i = 0; i < CHARACTERS.length; i++) {
-    const want = i === menuChar ? vehSel : DEFAULT_VEH[i];
-    const wantCol = i === menuChar ? COLOR_PALETTE[colorSel] : null;
+    const want = (net.active && i === net.remoteChar) ? net.remoteVeh
+      : i === menuChar ? vehSel : DEFAULT_VEH[i];
+    const wantCol = (net.active && i === net.remoteChar) ? net.remoteColor
+      : i === menuChar ? COLOR_PALETTE[colorSel] : null;
     if (kartMeshes[i].veh !== want || kartMeshes[i].colorOv !== wantCol) {
       scene.remove(kartMeshes[i].group);
       kartMeshes[i] = buildKartMesh(i, want, wantCol);
@@ -2669,6 +2671,7 @@ function makeKart(charIdx, isPlayer, gridPos) {
     aiSkill: 0.87 + (gridPos % 7) * 0.017,
     laneSeed: gridPos * 1.7,
     steerVis: 0, wheelSpin: 0,
+    netDriven: false, isRemotePlayer: false, netT: null,
   };
 }
 
@@ -2743,6 +2746,7 @@ function useItem(k) {
     mesh.position.set(k.x - fwdX * 55, roadY(bc, lateralOffset(k, bc)), k.y - fwdY * 55);
     scene.add(mesh);
     bananas.push({ x: mesh.position.x, y: mesh.position.z, mesh });
+    if (net.active && !k.netDriven) netSend({ t: 'item', kind: 'banana', x: mesh.position.x, y: mesh.position.z, ti: k.trackIdx, oc: k.charIdx });
     if (k.isPlayer) beep(500, 0.08, 'square');
   } else if (k.item === 'shell') {
     const mesh = shellProto.clone();
@@ -2753,10 +2757,12 @@ function useItem(k) {
       angle: k.angle, life: 4.5, owner: k, grace: 0.35,
       trackIdx: k.trackIdx, mesh,
     });
+    if (net.active && !k.netDriven) netSend({ t: 'item', kind: 'shell', x: k.x + fwdX * 40, y: k.y + fwdY * 40, a: k.angle, ti: k.trackIdx, oc: k.charIdx });
     if (k.isPlayer) beep(760, 0.12, 'square', 500);
   } else if (k.item === 'bolt') {
     for (const o of karts)
-      if (o !== k && o.key > k.key && o.spinT <= 0 && o.starT <= 0) { o.spinT = 1.1; o.speed *= 0.35; }
+      if (o !== k && !o.netDriven && o.key > k.key && o.spinT <= 0 && o.starT <= 0) { o.spinT = 1.1; o.speed *= 0.35; }
+    if (net.active && !k.netDriven) netSend({ t: 'item', kind: 'bolt', oc: k.charIdx, ok: k.key });
     beep(1200, 0.5, 'sawtooth', 200, 0.18);
   } else if (k.item === 'star') {
     k.starT = 5.5;
@@ -2771,6 +2777,309 @@ function spinKart(k) {
   k.speed *= 0.3;
   k.coins = Math.max(0, k.coins - 3);
   if (k.isPlayer) beep(700, 0.4, 'square', 120, 0.15);
+}
+
+/* ---------------- Online duo (WebRTC peer-to-peer via PeerJS) ----------------
+   Two phones connect directly with a 4-digit game code. The host simulates
+   the 6 AI karts and broadcasts them; each player simulates their own kart
+   and their own projectiles ("victim decides" for hits). If the other player
+   drops, we retry for 15s, then the AI quietly takes their wheel. */
+const net = {
+  active: false, isHost: false, peer: null, conn: null,
+  code: '', joinCode: '', status: '', error: '',
+  myChar: 0, remoteChar: 1,
+  remoteVeh: 0, remoteColor: null, remoteReady: false,
+  stTimer: 0, aiTimer: 0, retryT: 0, lostT: 0,
+  aiGoneT: 0, pendingConnect: null,
+};
+
+function peerOpts() {
+  const o = window.__iamPeerOpts; // test override (local PeerServer)
+  return o ? Object.assign({ debug: 0 }, o) : { debug: 0 };
+}
+
+function netSend(msg) {
+  if (net.conn && net.conn.open) { try { net.conn.send(msg); } catch (e) { /* drop */ } }
+}
+
+function netHost() {
+  netQuit(true);
+  if (typeof Peer === 'undefined') { net.error = 'Réseau indisponible'; state = 'mp'; return; }
+  net.active = true; net.isHost = true;
+  net.myChar = 0; net.remoteChar = 1;
+  net.code = String(1000 + Math.floor(Math.random() * 9000));
+  net.status = 'Création de la partie…';
+  const p = new Peer('iamkart-' + net.code, peerOpts());
+  net.peer = p;
+  p.on('open', () => { net.status = ''; });
+  p.on('connection', (c) => {
+    if (net.conn && net.conn.open) { try { c.close(); } catch (e) {} return; } // duo only
+    netAttach(c);
+  });
+  p.on('error', (err) => {
+    if (err && err.type === 'unavailable-id') { // code already taken — roll another
+      try { p.destroy(); } catch (e) {}
+      if (net.active && net.isHost) netHost();
+    } else netFail(err);
+  });
+  p.on('disconnected', () => { if (net.active && net.peer === p) { try { p.reconnect(); } catch (e) {} } });
+  state = 'mp-host';
+}
+
+function netJoinInit() {
+  netQuit(true);
+  if (typeof Peer === 'undefined') { net.error = 'Réseau indisponible'; state = 'mp'; return; }
+  net.active = true; net.isHost = false;
+  net.myChar = 1; net.remoteChar = 0;
+  net.joinCode = '';
+  const p = new Peer(peerOpts());
+  net.peer = p;
+  p.on('open', () => {
+    if (net.pendingConnect) { const c = net.pendingConnect; net.pendingConnect = null; netConnectTo(c); }
+  });
+  p.on('error', (err) => {
+    if (err && err.type === 'peer-unavailable') {
+      net.error = 'Partie introuvable — vérifie le code';
+      net.joinCode = ''; net.status = '';
+    } else netFail(err);
+  });
+  p.on('disconnected', () => { if (net.active && net.peer === p) { try { p.reconnect(); } catch (e) {} } });
+  state = 'mp-join';
+}
+
+function netConnectTo(code) {
+  if (!net.peer || net.peer.destroyed) return;
+  net.code = String(code);
+  if (!net.peer.open) { net.pendingConnect = String(code); return; } // connect once registered
+  net.status = 'Connexion…';
+  const c = net.peer.connect('iamkart-' + code, { reliable: true, serialization: 'json' });
+  if (c) netAttach(c);
+}
+
+function netAttach(c) {
+  net.conn = c;
+  c.on('open', () => {
+    net.lostT = 0; net.retryT = 0; net.error = ''; net.status = '';
+    beep(660, 0.12, 'square', 990);
+    if (state === 'mp-host' || state === 'mp-join') {
+      // fresh lobby: the host also picks the cc class, the guest goes straight to the garage
+      net.remoteReady = false;
+      menuChar = net.myChar;
+      resetRace(menuChar);
+      state = net.isHost ? 'cc' : 'char';
+    }
+  });
+  c.on('data', (m) => { try { netOnData(m); } catch (e) { /* malformed */ } });
+  c.on('close', () => netLost());
+  c.on('error', () => netLost());
+}
+
+function netFail(err) {
+  net.error = 'Réseau indisponible (' + ((err && err.type) || '?') + ')';
+  net.status = '';
+}
+
+function netShutdownPeer() {
+  try { if (net.conn) net.conn.close(); } catch (e) {}
+  try { if (net.peer) net.peer.destroy(); } catch (e) {}
+  net.conn = null; net.peer = null;
+}
+
+function netQuit(silent) {
+  if (!silent && net.conn && net.conn.open) netSend({ t: 'bye' });
+  netShutdownPeer();
+  net.active = false; net.isHost = false;
+  net.status = ''; net.error = ''; net.joinCode = '';
+  net.remoteReady = false; net.lostT = 0; net.retryT = 0;
+  net.pendingConnect = null;
+}
+
+function netRemoteKart() { return karts.find((k) => k.isRemotePlayer); }
+
+// the other player vanished mid-game
+function netLost() {
+  if (!net.active) return;
+  if (state === 'race' || state === 'countdown') {
+    if (net.lostT <= 0) { net.lostT = 0.001; net.retryT = 2.0; } // reconnection window opens
+  } else if (state === 'finish') {
+    netToAI();
+  } else {
+    net.error = 'Connexion perdue';
+    netShutdownPeer();
+    net.active = false;
+    if (state !== 'title') state = 'mp';
+  }
+}
+
+// give every network kart back to the local simulation
+function netToAI() {
+  for (const k of karts) if (k.netDriven) { k.netDriven = false; k.isPlayer = false; k.isRemotePlayer = false; }
+  net.aiGoneT = 5;
+  netQuit(true);
+}
+
+function duoStartRace() {
+  buildTrack(mapSel);
+  duoResetRace();
+  state = 'countdown';
+  countdownT = 0; lastBeep = -1;
+  tryFullscreen();
+  const ib = document.getElementById('install-banner');
+  if (ib) ib.hidden = true;
+}
+
+function duoResetRace() {
+  // identical grid on both phones: char 0 on pole, char 1 second, AI behind
+  resetRace(0);
+  const me = karts.find((k) => k.charIdx === net.myChar);
+  const other = karts.find((k) => k.charIdx === net.remoteChar);
+  karts[0].isPlayer = false;
+  me.isPlayer = true;
+  player = me;
+  other.isPlayer = false;
+  other.netDriven = true;
+  other.isRemotePlayer = true;
+  if (!net.isHost) for (const k of karts) if (k !== me && k !== other) k.netDriven = true;
+  camAngle = player.angle;
+}
+
+function duoRematch() {
+  if (!net.active || !(net.conn && net.conn.open)) return;
+  netSend({ t: 'rematch' });
+  duoStartRace();
+}
+
+function netOnData(m) {
+  if (!m || typeof m !== 'object') return;
+  if (m.t === 'st') {                       // the other player's kart
+    const k = netRemoteKart();
+    if (k) {
+      k.netT = { x: +m.x, y: +m.y, a: +m.a, s: +m.s, age: 0 };
+      k.lap = m.l | 0; k.trackIdx = (m.ti | 0) % N;
+      k.key = k.lap * N + k.trackIdx;
+      k.spinT = +m.sp || 0; k.starT = +m.st || 0; k.boostT = +m.b || 0;
+      k.coins = m.c | 0; k.steerVis = +m.sv || 0;
+    }
+  } else if (m.t === 'ai') {                // host's AI fleet (guest side)
+    if (!net.isHost && Array.isArray(m.ks)) for (const s of m.ks) {
+      const k = karts.find((q) => q.charIdx === (s.c | 0) && q.netDriven && !q.isRemotePlayer);
+      if (k) {
+        k.netT = { x: +s.x, y: +s.y, a: +s.a, s: +s.s, age: 0 };
+        k.lap = s.l | 0; k.trackIdx = (s.ti | 0) % N;
+        k.key = k.lap * N + k.trackIdx;
+        k.spinT = +s.sp || 0; k.starT = +s.st || 0; k.boostT = +s.b || 0;
+        if (+s.ft) k.finishTime = +s.ft;
+      }
+    }
+  } else if (m.t === 'ready') {             // the other player picked veh + color
+    net.remoteVeh = clamp(m.veh | 0, 0, VEHICLES.length - 1);
+    net.remoteColor = typeof m.color === 'string' ? m.color : null;
+    net.remoteReady = true;
+    ensureKartMeshes();
+  } else if (m.t === 'go') {                // host launches the race
+    if (!net.isHost) {
+      mapSel = clamp(m.map | 0, 0, MAPS.length - 1);
+      ccSel = clamp(m.cc | 0, 0, CC_CLASSES.length - 1);
+      ccMul = CC_CLASSES[ccSel].mul;
+      duoStartRace();
+    }
+  } else if (m.t === 'item') {
+    netSpawnItem(m);
+  } else if (m.t === 'fin') {
+    const k = netRemoteKart();
+    if (k && !k.finishTime) { k.finishTime = +m.time || raceTime; k.lap = LAPS + 1; }
+  } else if (m.t === 'rematch') {
+    if (state === 'finish') duoStartRace();
+  } else if (m.t === 'bye') {
+    netLost();
+  }
+}
+
+// spawn the projectile the other simulation just fired
+function netSpawnItem(m) {
+  const owner = karts.find((k) => k.charIdx === (m.oc | 0)) || null;
+  const ti = (m.ti | 0) % N;
+  if (m.kind === 'shell') {
+    const mesh = shellProto.clone();
+    mesh.position.set(+m.x, center[ti].h, +m.y);
+    scene.add(mesh);
+    shells.push({ x: +m.x, y: +m.y, angle: +m.a, life: 4.5, owner, grace: 0.35, trackIdx: ti, mesh });
+  } else if (m.kind === 'banana') {
+    const bc = center[ti];
+    const lat = (+m.x - bc.x) * bc.nx + (+m.y - bc.y) * bc.ny;
+    const mesh = bananaProto.clone();
+    mesh.position.set(+m.x, roadY(bc, clamp(lat, -HALFW, HALFW)), +m.y);
+    scene.add(mesh);
+    bananas.push({ x: +m.x, y: +m.y, mesh });
+  } else if (m.kind === 'bolt') {
+    // each side applies the lightning to its own kart only
+    if (player && player.key > (m.ok | 0) && player.spinT <= 0 && player.starT <= 0) {
+      player.spinT = 1.1; player.speed *= 0.35;
+    }
+    beep(1200, 0.5, 'sawtooth', 200, 0.18);
+  }
+}
+
+// dead-reckoned interpolation of a network-driven kart
+function netLerpKart(k, dt) {
+  const t = k.netT;
+  if (t) {
+    t.age += dt;
+    const ext = Math.min(t.age, 0.4);
+    const px = t.x + Math.cos(t.a) * t.s * ext;
+    const py = t.y + Math.sin(t.a) * t.s * ext;
+    const f = Math.min(1, dt * 8);
+    k.x = lerp(k.x, px, f);
+    k.y = lerp(k.y, py, f);
+    k.angle += angDiff(k.angle, t.a) * f;
+    k.speed = t.s;
+  }
+  if (k.spinT > 0) { k.spinT -= dt; k.spinAng += dt * 12; } else k.spinAng = 0;
+  if (k.starT > 0) k.starT -= dt;
+  if (k.boostT > 0) k.boostT -= dt;
+  k.wheelSpin += k.speed * dt / 5.5;
+  k.trackIdx = nearestIdx(k);
+  k.key = k.lap * N + k.trackIdx;
+}
+
+// periodic sends: my kart at 15 Hz, host AI fleet at 10 Hz, reconnection retries
+function netTick(dt) {
+  if (net.aiGoneT > 0) net.aiGoneT -= dt;
+  if (!net.active) return;
+  if (net.lostT > 0) {
+    net.lostT += dt;
+    net.retryT -= dt;
+    if (net.conn && net.conn.open) { net.lostT = 0; }
+    else if (!net.isHost && net.retryT <= 0 && net.lostT < 15) { net.retryT = 2.5; netConnectTo(net.code); }
+    else if (net.lostT >= 15) { netToAI(); return; }
+  }
+  if (state !== 'race' && state !== 'countdown' && state !== 'finish') return;
+  net.stTimer -= dt;
+  if (net.stTimer <= 0 && player) {
+    net.stTimer = 1 / 15;
+    const k = player;
+    netSend({
+      t: 'st', x: +k.x.toFixed(1), y: +k.y.toFixed(1), a: +k.angle.toFixed(3), s: +k.speed.toFixed(1),
+      l: k.lap, ti: k.trackIdx, sp: +k.spinT.toFixed(2), st: +k.starT.toFixed(2), b: +k.boostT.toFixed(2),
+      c: k.coins, sv: +k.steerVis.toFixed(2),
+    });
+  }
+  if (net.isHost) {
+    net.aiTimer -= dt;
+    if (net.aiTimer <= 0) {
+      net.aiTimer = 1 / 10;
+      const ks = [];
+      for (const k of karts) {
+        if (k.isPlayer || k.netDriven) continue;
+        ks.push({
+          c: k.charIdx, x: +k.x.toFixed(1), y: +k.y.toFixed(1), a: +k.angle.toFixed(3), s: +k.speed.toFixed(1),
+          l: k.lap, ti: k.trackIdx, sp: +k.spinT.toFixed(2), st: +k.starT.toFixed(2), b: +k.boostT.toFixed(2),
+          ft: +k.finishTime.toFixed(2),
+        });
+      }
+      netSend({ t: 'ai', ks });
+    }
+  }
 }
 
 /* ---------------- Physics & AI ---------------- */
@@ -2963,7 +3272,7 @@ function updateShells(dt) {
       for (const k of karts) {
         if (k === s.owner && s.grace > 0) continue;
         if ((k.x - s.x) ** 2 + (k.y - s.y) ** 2 < 26 * 26) {
-          if (k.starT <= 0) spinKart(k);
+          if (k.starT <= 0 && !k.netDriven) spinKart(k);
           dead = true;
           break;
         }
@@ -2986,12 +3295,17 @@ function kartCollisions() {
       const dx = b.x - a.x, dy = b.y - a.y;
       const d2 = dx * dx + dy * dy;
       if (d2 < 30 * 30 && d2 > 0.01) {
+        if (a.netDriven && b.netDriven) continue; // both driven by the other phone
         const d = Math.sqrt(d2), push = (30 - d) / 2;
         const ux = dx / d, uy = dy / d;
-        a.x -= ux * push; a.y -= uy * push;
-        b.x += ux * push; b.y += uy * push;
-        if (a.starT > 0 && b.starT <= 0) spinKart(b);
-        else if (b.starT > 0 && a.starT <= 0) spinKart(a);
+        if (a.netDriven) { b.x += ux * push * 2; b.y += uy * push * 2; }
+        else if (b.netDriven) { a.x -= ux * push * 2; a.y -= uy * push * 2; }
+        else {
+          a.x -= ux * push; a.y -= uy * push;
+          b.x += ux * push; b.y += uy * push;
+        }
+        if (a.starT > 0 && b.starT <= 0 && !b.netDriven) spinKart(b);
+        else if (b.starT > 0 && a.starT <= 0 && !a.netDriven) spinKart(a);
       }
     }
 }
@@ -3209,7 +3523,7 @@ function spawnConfetti() {
 
 /* ---------------- Camera ---------------- */
 function updateCamera(dt) {
-  if (state === 'title' || state === 'cc') {
+  if (state === 'title' || state === 'cc' || state === 'mp' || state === 'mp-host' || state === 'mp-join' || state === 'mp-wait') {
     // wide orbit over the start grid
     const t = perfNow * 0.0003;
     const c = center[(N - 20) % N];
@@ -3331,6 +3645,10 @@ function drawCoinIcon(x, y, s = 1) {
 }
 
 function drawHUD() {
+  if (net.lostT > 0 && Math.sin(perfNow * 0.015) > 0)
+    text('⚠ Connexion perdue — reconnexion…', HW / 2, OY + 30, 13, 'center', '#ff7c6a');
+  else if (net.aiGoneT > 0)
+    text("Joueur 2 déconnecté — l'IA prend le volant", HW / 2, OY + 30, 12, 'center', '#ffd24a');
   if (player.offroadT > 1.2 && state === 'race') {
     // rescue incoming — pulse a warning so the teleport isn't a surprise
     const blink = Math.sin(perfNow * 0.012) > -0.3;
@@ -3430,8 +3748,89 @@ function drawTitle() {
   text('IAM KART', HW / 2, OY + 50, 58, 'center', '#40e0ff');
   text('Inès · Alice · Marlon', HW / 2, OY + 112, 16, 'center', '#ff50dc');
   drawGoButton('JOUER ▶');
+  { // duo entry above the main button
+    const w = 250, h = 32, x = HW / 2 - w / 2, y = HB - 92;
+    hctx.fillStyle = 'rgba(30,60,140,0.75)';
+    hctx.strokeStyle = '#ff50dc'; hctx.lineWidth = 2;
+    hctx.beginPath(); hctx.roundRect(x, y, w, h, 16); hctx.fill(); hctx.stroke();
+    text('À DEUX EN LIGNE 👥', HW / 2, y + 7, 14, 'center', '#fff');
+    hitR(x - 8, y - 6, w + 16, h + 12, { t: 'duo' });
+  }
   if (!matchMedia('(pointer: coarse)').matches)
     text('← → choisir · Entrée valider · B retour · R recommencer', HW / 2, OY + 238, 10, 'center', '#9ab');
+}
+
+function mpButton(y, label, act) {
+  const w = 290, h = 42, x = HW / 2 - w / 2;
+  hctx.fillStyle = 'rgba(30,60,140,0.75)';
+  hctx.strokeStyle = '#4fc3ff'; hctx.lineWidth = 2;
+  hctx.beginPath(); hctx.roundRect(x, y, w, h, 14); hctx.fill(); hctx.stroke();
+  text(label, HW / 2, y + 12, 15, 'center', '#fff');
+  hitR(x - 8, y - 6, w + 16, h + 12, act);
+}
+
+function drawMpMenu() {
+  hctx.fillStyle = 'rgba(8,5,25,0.5)';
+  hctx.fillRect(0, 0, HW, HB);
+  text('JOUER À DEUX', HW / 2, OY + 16, 26, 'center', '#40e0ff');
+  text('2 téléphones — Wi-Fi ou 4G', HW / 2, OY + 48, 12, 'center', '#9ab');
+  mpButton(OY + 84, 'CRÉER UNE PARTIE', { t: 'mp-create' });
+  mpButton(OY + 142, 'REJOINDRE AVEC UN CODE', { t: 'mp-goto-join' });
+  if (net.error) text('⚠ ' + net.error, HW / 2, OY + 202, 12, 'center', '#ff7c6a');
+  text('‹ retour', 14, OY + 46, 13, 'left', '#cde');
+  hitR(0, OY + 36, 96, 36, { t: 'back' });
+}
+
+function drawMpHost() {
+  hctx.fillStyle = 'rgba(8,5,25,0.6)';
+  hctx.fillRect(0, 0, HW, HB);
+  text('TON CODE DE PARTIE', HW / 2, OY + 22, 20, 'center', '#40e0ff');
+  text((net.code || '····').split('').join('  '), HW / 2, OY + 64, 56, 'center', '#ffd24a');
+  text("Donne ce code à l'autre joueur", HW / 2, OY + 148, 14, 'center', '#fff');
+  const dots = '.'.repeat(1 + ((perfNow / 400) | 0) % 3);
+  text((net.status || 'En attente du joueur 2') + dots, HW / 2, OY + 178, 13, 'center', '#9fe');
+  if (net.error) text('⚠ ' + net.error, HW / 2, OY + 210, 12, 'center', '#ff7c6a');
+  text('‹ retour', 14, OY + 46, 13, 'left', '#cde');
+  hitR(0, OY + 36, 96, 36, { t: 'back' });
+}
+
+function drawMpJoin() {
+  hctx.fillStyle = 'rgba(8,5,25,0.6)';
+  hctx.fillRect(0, 0, HW, HB);
+  text('TAPE LE CODE', HW / 2, OY + 10, 20, 'center', '#40e0ff');
+  for (let i = 0; i < 4; i++) { // 4 code slots
+    const x = HW / 2 - 82 + i * 44, y = OY + 38;
+    hctx.strokeStyle = i === net.joinCode.length ? '#ffd24a' : 'rgba(255,255,255,0.5)';
+    hctx.lineWidth = 2;
+    hctx.beginPath(); hctx.roundRect(x, y, 36, 40, 8); hctx.stroke();
+    if (net.joinCode[i]) text(net.joinCode[i], x + 18, y + 8, 24, 'center', '#fff');
+  }
+  const rows = [[1, 2, 3], [4, 5, 6], [7, 8, 9], ['⌫', 0, null]];
+  rows.forEach((row, r) => {
+    row.forEach((d, ci) => {
+      if (d === null) return;
+      const x = HW / 2 - 74 + ci * 52, y = OY + 92 + r * 40;
+      hctx.fillStyle = 'rgba(30,60,140,0.7)';
+      hctx.beginPath(); hctx.roundRect(x, y, 44, 32, 10); hctx.fill();
+      text(String(d), x + 22, y + 7, 17, 'center', '#fff');
+      hitR(x - 3, y - 3, 50, 38, d === '⌫' ? { t: 'digit-del' } : { t: 'digit', d });
+    });
+  });
+  if (net.status) text(net.status + '.'.repeat(1 + ((perfNow / 400) | 0) % 3), HW / 2, HB - 40, 13, 'center', '#9fe');
+  if (net.error) text('⚠ ' + net.error, HW / 2, HB - 24, 12, 'center', '#ff7c6a');
+  text('‹ retour', 14, OY + 46, 13, 'left', '#cde');
+  hitR(0, OY + 36, 96, 36, { t: 'back' });
+}
+
+function drawMpWait() {
+  hctx.fillStyle = 'rgba(8,5,25,0.5)';
+  hctx.fillRect(0, 0, HW, HB);
+  const dots = '.'.repeat(1 + ((perfNow / 400) | 0) % 3);
+  text('PRÊT !', HW / 2, OY + 60, 26, 'center', '#6ede3a');
+  text("L'hôte choisit le circuit" + dots, HW / 2, OY + 110, 16, 'center', '#fff');
+  text('La course démarre toute seule, tiens-toi prêt 🏁', HW / 2, OY + 146, 12, 'center', '#9ab');
+  text('‹ retour', 14, OY + 46, 13, 'left', '#cde');
+  hitR(0, OY + 36, 96, 36, { t: 'back' });
 }
 
 function drawCcSelect() {
@@ -3531,7 +3930,8 @@ function drawMapSelect() {
       hctx.strokeRect(x - 2, y - 2, th + 4, th + 4);
     }
   });
-  drawGoButton('C’EST PARTI ! 🏁');
+  if (net.active && !net.remoteReady) text('En attente du joueur 2…', HW / 2, HB - 42, 14, 'center', '#ffd24a');
+  else drawGoButton('C’EST PARTI ! 🏁');
 }
 
 function drawCountdown() {
@@ -3569,7 +3969,18 @@ function drawFinish() {
     const best = Math.min(...player.lapTimes);
     text(`Meilleur tour : ${fmtTime(best)}`, HW / 2, HB - 44, 11, 'center', '#9fe');
   }
-  if (!pendingRecord) {
+  if (net.active) {
+    const rk = netRemoteKart();
+    if (rk && !rk.finishTime) text("L'autre joueur roule encore…", HW / 2, HB - 78, 11, 'center', '#9fe');
+    if (!pendingRecord) {
+      const w = 210, h = 32, x = HW / 2 - w / 2, y = HB - 40;
+      hctx.fillStyle = 'rgba(30,140,80,0.8)';
+      hctx.strokeStyle = '#6ede3a'; hctx.lineWidth = 2;
+      hctx.beginPath(); hctx.roundRect(x, y, w, h, 14); hctx.fill(); hctx.stroke();
+      text('REVANCHE 🔁', HW / 2, y + 8, 15, 'center', '#fff');
+      hitR(x - 8, y - 6, w + 16, h + 12, { t: 'rematch' });
+    }
+  } else if (!pendingRecord) {
     const blink = (perfNow / 500 | 0) % 2 === 0;
     if (blink) text('TOUCHE / ENTRÉE POUR REJOUER', HW / 2, HB - 24, 13, 'center', '#fff');
   }
@@ -3619,10 +4030,15 @@ function frame(t) {
   while ((uiAct = uiQueue.shift())) {
     const a = uiAct;
     if (a.t === 'back') {
-      if (state === 'cc') state = 'title';
-      else if (state === 'char') state = 'cc';
-      else if (state === 'color') state = 'char';
+      if (state === 'cc') {
+        if (net.active) { netQuit(); state = 'mp'; } else state = 'title';
+      } else if (state === 'char') {
+        if (net.active && !net.isHost) { netQuit(); state = 'mp'; } else state = 'cc';
+      } else if (state === 'color') state = 'char';
       else if (state === 'map') state = 'color';
+      else if (state === 'mp') { netQuit(); state = 'title'; }
+      else if (state === 'mp-host' || state === 'mp-join') { netQuit(); state = 'mp'; }
+      else if (state === 'mp-wait') state = 'color';
       beep(360, 0.08, 'square');
     } else if (a.t === 'nav') {
       const dir = a.d;
@@ -3637,6 +4053,14 @@ function frame(t) {
       beep(480, 0.06, 'square');
     } else if (a.t === 'go') {
       tapStart = true;
+    } else if (a.t === 'duo') { net.error = ''; state = 'mp'; beep(560, 0.08, 'square');
+    } else if (a.t === 'mp-create') { netHost(); beep(560, 0.08, 'square');
+    } else if (a.t === 'mp-goto-join') { netJoinInit(); beep(560, 0.08, 'square');
+    } else if (a.t === 'digit') {
+      if (net.joinCode.length < 4) { net.joinCode += String(a.d); beep(660, 0.05, 'square'); }
+      if (net.joinCode.length === 4) { net.error = ''; netConnectTo(net.joinCode); }
+    } else if (a.t === 'digit-del') { net.joinCode = net.joinCode.slice(0, -1); net.error = ''; beep(360, 0.05, 'square');
+    } else if (a.t === 'rematch') { duoRematch();
     } else if (a.t === 'col') {
       colorSel = a.i !== undefined ? a.i : (colorSel + COLOR_PALETTE.length + a.d) % COLOR_PALETTE.length;
       try { localStorage.setItem('iam-color', String(colorSel)); } catch (e) {}
@@ -3700,7 +4124,13 @@ function frame(t) {
     if (rightPressed) uiQueue.push({ t: 'col', d: 1 });
     if (karts.length === 0) resetRace(menuChar);
     if (itemPressed) { state = 'char'; beep(360, 0.08, 'square'); }
-    else if (startPressed) { state = 'map'; beep(560, 0.08, 'square'); }
+    else if (startPressed) {
+      if (net.active) {
+        netSend({ t: 'ready', veh: vehSel, color: COLOR_PALETTE[colorSel] });
+        state = net.isHost ? 'map' : 'mp-wait';
+      } else state = 'map';
+      beep(560, 0.08, 'square');
+    }
   } else if (state === 'map') {
     // étape 3/3 : circuit (survol 3D en direct + vignettes)
     let changed = false;
@@ -3713,23 +4143,34 @@ function frame(t) {
     }
     if (itemPressed) { state = 'color'; beep(360, 0.08, 'square'); }
     else if (startPressed) {
-      resetRace(menuChar);
-      state = 'countdown';
-      countdownT = 0; lastBeep = -1;
-      tryFullscreen();
-      const ib = document.getElementById('install-banner');
-      if (ib) ib.hidden = true; // ne jamais gêner la course
+      if (net.active) {
+        if (net.remoteReady && net.conn && net.conn.open) {
+          netSend({ t: 'go', map: mapSel, cc: ccSel });
+          duoStartRace();
+        }
+      } else {
+        resetRace(menuChar);
+        state = 'countdown';
+        countdownT = 0; lastBeep = -1;
+        tryFullscreen();
+        const ib = document.getElementById('install-banner');
+        if (ib) ib.hidden = true; // ne jamais gêner la course
+      }
     }
   } else if (state === 'countdown') {
     countdownT += dt;
     if (countdownT >= 3) { raceTime = 0; state = 'race'; }
+  } else if (state === 'mp' || state === 'mp-host' || state === 'mp-join' || state === 'mp-wait') {
+    if (itemPressed) uiQueue.push({ t: 'back' });
   }
+
+  netTick(dt);
 
   if (state === 'race' || state === 'finish') {
     raceTime += dt;
     if (state === 'race') countdownT += dt;
     for (const b of track.itemBoxes) if (b.respawn > 0) b.respawn -= dt;
-    for (const k of karts) updateKart(k, dt);
+    for (const k of karts) (k.netDriven ? netLerpKart(k, dt) : updateKart(k, dt));
     updateShells(dt);
     kartCollisions();
     updatePlaces();
@@ -3739,6 +4180,7 @@ function frame(t) {
       pendingRecord = { time: player.finishTime, laps: [...player.lapTimes] };
       nameAsked = false;
       newRecordRank = -1;
+      if (net.active) netSend({ t: 'fin', time: player.finishTime });
       spawnConfetti();
       beep(523, 0.15, 'square'); beep(659, 0.15, 'square');
       setTimeout(() => beep(784, 0.3, 'square', 1046), 180);
@@ -3748,7 +4190,11 @@ function frame(t) {
     if (finishDelay > 0) finishDelay -= dt;
     else {
       if (pendingRecord && !nameAsked) { nameAsked = true; showNameOverlay(); }
-      if (startPressed && !pendingRecord) { state = 'cc'; resetRace(menuChar); }
+      if (startPressed && !pendingRecord) {
+        if (net.active) duoRematch();
+        else { state = 'cc'; resetRace(menuChar); }
+      }
+      if (net.active && itemPressed && !pendingRecord) { netQuit(); menuChar = 0; state = 'title'; resetRace(menuChar); }
     }
   }
   if (itemPressed && state === 'race') useItem(player);
@@ -3770,6 +4216,10 @@ function frame(t) {
   else if (state === 'char') drawCharSelect();
   else if (state === 'color') drawColorSelect();
   else if (state === 'map') drawMapSelect();
+  else if (state === 'mp') drawMpMenu();
+  else if (state === 'mp-host') drawMpHost();
+  else if (state === 'mp-join') drawMpJoin();
+  else if (state === 'mp-wait') drawMpWait();
   else {
     drawHUD();
     if (state === 'countdown' || (state === 'race' && countdownT < 3.7)) drawCountdown();
@@ -3798,6 +4248,12 @@ function tryFullscreen() {
   } catch (e) { /* pas bloquant */ }
 }
 
+document.addEventListener('keydown', (e) => {
+  if (state !== 'mp-join') return;
+  if (/^[0-9]$/.test(e.key)) uiQueue.push({ t: 'digit', d: +e.key });
+  else if (e.key === 'Backspace') uiQueue.push({ t: 'digit-del' });
+});
+
 buildTrack(0);
 resetRace(0);
 requestAnimationFrame(frame);
@@ -3820,6 +4276,18 @@ window.IAM = {
   get kartMeshes() { return kartMeshes; },
   setVeh(v) { uiQueue.push({ t: 'veh', d: v - vehSel }); },
   makePlayerAI() { if (player) player.isPlayer = false; },
+  mpHost() { netHost(); },
+  mpJoin(code) { netJoinInit(); netConnectTo(String(code)); },
+  fireItem() { if (player && state === 'race') useItem(player); },
+  get shells() { return shells; },
+  get bananas() { return bananas; },
+  get net() {
+    return {
+      active: net.active, isHost: net.isHost, code: net.code,
+      open: !!(net.conn && net.conn.open), status: net.status, error: net.error,
+      remoteReady: net.remoteReady, lostT: net.lostT,
+    };
+  },
   start(mapIdx = 0, ccIdx = 2, charIdx = 0) {
     menuChar = charIdx; mapSel = mapIdx; ccSel = ccIdx;
     ccMul = CC_CLASSES[ccSel].mul;

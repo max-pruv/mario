@@ -16,6 +16,13 @@ Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker
 - Le micro se coupe proprement à la fin de la partie ou si la connexion tombe.
 - Testé de bout en bout : deux navigateurs à micros simulés, flux vocal reçu dans les deux sens, on/off propre — 7/7.
 
+## v28 — UI des menus : barre unifiée, cartes lisibles
+
+- **Barre du haut unifiée** : GYRO / son / AUTO deviennent des pilules de même hauteur dans une vraie rangée flex (plus de tailles disparates ni de positions au pixel), micro assorti à droite.
+- **‹ RETOUR aligné sur la ligne de titre** (plus de puce qui flotte au milieu de l'écran) + voile de lisibilité derrière l'en-tête.
+- **Chaque option 50/100/150cc a sa carte** (fond sombre translucide, bordure, surbrillance cyan pour la sélection) — fini le texte blanc illisible posé sur la scène 3D.
+- **Plaques** derrière les noms de véhicule / pilote / circuit pour une lisibilité constante.
+
 ## v27 — Révolution graphique
 
 - **Model Y entièrement resculptée** : carrosserie **loftée par 14 sections transversales** (vraies courbures automobiles : capot bombé, ceinture de caisse, pincement de pavillon, hayon fastback) au lieu d'une extrusion plate. **Texture de carrosserie 1024** : vitrages teintés avec montants A/B/C, lignes de portes, poignées affleurantes, ombres de passages de roues, bas de caisse satin, reflet de ciel sur les épaules. Plancher plat d'EV, becquet avant, entrée d'air, DRLs LED, bandeau arrière.

@@ -16,6 +16,15 @@ Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker
 - Le micro se coupe proprement à la fin de la partie ou si la connexion tombe.
 - Testé de bout en bout : deux navigateurs à micros simulés, flux vocal reçu dans les deux sens, on/off propre — 7/7.
 
+## v32-v33 — UI ancrée, prénoms en multi, bouton bonus accessible, 2 nouveaux circuits
+
+- **Widgets ancrés** : plaques, compteurs, sous-titres, flèches et minimap partagent un seul ancrage par écran — plus de « BRIQUE » hors de sa plaque ni de flèches décalées de leurs zones tactiles (le tap raté n'avance plus l'étape : « taper n'importe où » ne vaut plus que sur titre et arrivée).
+- **iPad/paysage** : les menus démarrent sous la barre de boutons dans les deux orientations ; pavé numérique adaptatif.
+- **Prénoms en multijoueur** : puce « ✏️ Prénom » sur les écrans multi — le prénom voyage en réseau et s'affiche dans le lobby, le mini-classement et l'écran d'arrivée.
+- **Bouton bonus déplacé** près de l'accélérateur (gros slot tappable au-dessus des boutons A/B) — le B marche toujours.
+- **Quitter** = flèche de sortie classique ➜] en haut à droite, ↻ recommencer juste dessous.
+- **2 nouveaux circuits** : **Odyssée Cosmique** (nuit stellaire, 900 étoiles, tours néon, relief lunaire) et **Vallée Psychédélique** (ciel arc-en-ciel, montagnes magenta, monde bonbon).
+
 ## v29 — Musique d'ambiance, finesse ×4, vraie pleine hauteur
 
 - **Musique d'ambiance procédurale** (séquenceur WebAudio embarqué, zéro fichier) : arpèges doux dans les menus (96 BPM), groove entraînant en course (132 BPM, basse + mélodie pentatonique + charley) — coupée par le bouton son, reprise propre.

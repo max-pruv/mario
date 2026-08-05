@@ -1232,10 +1232,10 @@ let kartMeshes = CHARACTERS.map((_, i) => buildKartMesh(i, i === 0 ? vehSel : DE
 // rebuild any kart whose vehicle should change (player picks vehSel, AI keep theirs)
 function ensureKartMeshes() {
   for (let i = 0; i < CHARACTERS.length; i++) {
-    const remoteOv = net.active && i === net.remoteChar && i !== menuChar;
-    const want = remoteOv ? net.remoteVeh
+    const ov = net.active ? netSeatOv(i) : null;
+    const want = ov ? clamp(ov.veh | 0, 0, VEHICLES.length - 1)
       : i === menuChar ? vehSel : DEFAULT_VEH[i];
-    const wantCol = remoteOv ? net.remoteColor
+    const wantCol = ov ? (ov.color || null)
       : i === menuChar ? COLOR_PALETTE[colorSel] : null;
     if (kartMeshes[i].veh !== want || kartMeshes[i].colorOv !== wantCol) {
       scene.remove(kartMeshes[i].group);
@@ -2843,16 +2843,23 @@ function spinKart(k) {
   if (k.isPlayer) beep(700, 0.4, 'square', 120, 0.15);
 }
 
-/* ---------------- Online duo (WebRTC peer-to-peer via PeerJS) ----------------
-   Two phones connect directly with a 4-digit game code. The host simulates
-   the 6 AI karts and broadcasts them; each player simulates their own kart
-   and their own projectiles ("victim decides" for hits). If the other player
-   drops, we retry for 15s, then the AI quietly takes their wheel. */
+/* ---------------- Online play (WebRTC peer-to-peer via PeerJS) ----------------
+   Up to 8 players. Star topology: every guest talks only to the host, and the
+   host relays positions, items and finishes to everyone else. Each phone
+   simulates its own kart ("victim decides" for hits); the host simulates the
+   remaining AI karts and broadcasts them. If someone drops we retry for 15s,
+   then the AI quietly takes their wheel. */
+const MAX_PLAYERS = 8;
 const net = {
-  active: false, isHost: false, peer: null, conn: null,
+  active: false, isHost: false, peer: null,
+  conn: null,           // guest: my link to the host
+  conns: [],            // host: live guest links (each carries _pinfo)
   code: '', joinCode: '', status: '', error: '',
-  myChar: 0, remoteChar: 1,
-  remoteVeh: 0, remoteColor: null, remoteReady: false,
+  myChar: 0,
+  hostReady: false, locked: false,
+  roster: [],           // display copy: [{c, veh, color, ready, me}]
+  seats: null,          // final assignments at GO: [{c, veh, color}]
+  lostSeats: [],        // host: guests we're waiting for [{char, t}]
   stTimer: 0, aiTimer: 0, retryT: 0, lostT: 0,
   aiGoneT: 0, pendingConnect: null,
 };
@@ -2862,25 +2869,52 @@ function peerOpts() {
   return o ? Object.assign({ debug: 0 }, o) : { debug: 0 };
 }
 
+// guest: send to the host — host: broadcast to every guest
 function netSend(msg) {
-  if (net.conn && net.conn.open) { try { net.conn.send(msg); } catch (e) { /* drop */ } }
+  if (net.isHost) {
+    for (const c of net.conns) { if (c.open) { try { c.send(msg); } catch (e) {} } }
+  } else if (net.conn && net.conn.open) {
+    try { net.conn.send(msg); } catch (e) {}
+  }
 }
 
-/* ---- voice chat: each side calls the other with its mic stream ---- */
+function netRelay(msg, except) {
+  if (!net.isHost) return;
+  for (const c of net.conns) {
+    if (c === except || !c.open) continue;
+    try { c.send(msg); } catch (e) {}
+  }
+}
+
+function netGuestCount() { return net.isHost ? net.conns.filter((c) => c.open).length : 0; }
+function netPlayerCount() { return net.isHost ? 1 + netGuestCount() : Math.max(2, net.roster.length); }
+function netAllReady() {
+  if (!net.isHost) return false;
+  return net.hostReady && netGuestCount() > 0 && net.conns.every((c) => !c.open || (c._pinfo && c._pinfo.ready));
+}
+
+function netSeatOv(charIdx) {
+  if (!net.active || charIdx === menuChar) return null;
+  if (net.seats) { const s = net.seats.find((q) => q.c === charIdx); if (s) return s; }
+  const r = net.roster.find((q) => q.c === charIdx && !q.me);
+  return r || null;
+}
+
+function netHumans() { return karts.filter((k) => k.isPlayer || k.isRemotePlayer); }
+
+/* ---- voice chat: everyone talks with the host (host hears all, all hear host) ---- */
 net.voice = { sending: false, stream: null, calls: [], incoming: 0 };
-let voiceEl = null;
+let voiceEls = [];
 
 function playRemoteVoice(stream) {
-  if (!voiceEl) {
-    voiceEl = document.createElement('audio');
-    voiceEl.autoplay = true;
-    voiceEl.setAttribute('playsinline', '');
-    document.body.appendChild(voiceEl);
-  }
-  voiceEl.srcObject = stream;
-  const tryPlay = () => voiceEl.play().catch(() => {
-    // iOS: retry on the next user gesture
-    document.addEventListener('pointerdown', tryPlay, { once: true });
+  const el = document.createElement('audio');
+  el.autoplay = true;
+  el.setAttribute('playsinline', '');
+  el.srcObject = stream;
+  document.body.appendChild(el);
+  voiceEls.push(el);
+  const tryPlay = () => el.play().catch(() => {
+    document.addEventListener('pointerdown', tryPlay, { once: true }); // iOS gesture rule
   });
   tryPlay();
   net.voice.incoming++;
@@ -2897,16 +2931,20 @@ function voiceAnswer(call) {
 
 async function voiceToggle() {
   if (net.voice.sending) { voiceStopSending(); updateMicBtn(); return; }
-  if (!(net.conn && net.conn.open)) return;
+  const peers = net.isHost ? net.conns.filter((c) => c.open).map((c) => c.peer)
+    : (net.conn && net.conn.open ? [net.conn.peer] : []);
+  if (!peers.length) return;
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
     net.voice.stream = stream;
     net.voice.sending = true;
-    const call = net.peer.call(net.conn.peer, stream, { metadata: { type: 'voice' } });
-    if (call) {
-      call.on('stream', playRemoteVoice); // the other side may answer with its mic
-      call.on('close', () => { net.voice.calls = net.voice.calls.filter((c) => c !== call); });
-      net.voice.calls.push(call);
+    for (const pid of peers) {
+      const call = net.peer.call(pid, stream, { metadata: { type: 'voice' } });
+      if (call) {
+        call.on('stream', playRemoteVoice);
+        call.on('close', () => { net.voice.calls = net.voice.calls.filter((c) => c !== call); });
+        net.voice.calls.push(call);
+      }
     }
     beep(880, 0.1, 'square', 1320);
   } catch (e) {
@@ -2927,33 +2965,40 @@ function voiceShutdown() {
   for (const c of net.voice.calls) { try { c.close(); } catch (e) {} }
   net.voice.calls = [];
   net.voice.incoming = 0;
-  if (voiceEl) { try { voiceEl.srcObject = null; } catch (e) {} }
+  for (const el of voiceEls) { try { el.srcObject = null; el.remove(); } catch (e) {} }
+  voiceEls = [];
   updateMicBtn();
 }
 
 const micBtn = document.getElementById('btnMic');
+function netLinkUp() {
+  return net.active && (net.isHost ? net.conns.some((c) => c.open) : !!(net.conn && net.conn.open));
+}
 function updateMicBtn() {
   if (!micBtn) return;
-  const show = net.active && net.conn && net.conn.open;
-  micBtn.style.display = show ? '' : 'none';
+  micBtn.style.display = netLinkUp() ? '' : 'none';
   micBtn.textContent = net.voice.sending ? '🎙 ON' : '🎙 OFF';
   micBtn.classList.toggle('on', net.voice.sending);
 }
 if (micBtn) micBtn.addEventListener('click', () => { voiceToggle(); });
 
+/* ---- lobby lifecycle ---- */
 function netHost() {
   netQuit(true);
   if (typeof Peer === 'undefined') { net.error = 'Réseau indisponible'; state = 'mp'; return; }
   net.active = true; net.isHost = true;
-  net.myChar = 0; net.remoteChar = 1;
+  net.myChar = menuChar = 0;
   net.code = String(1000 + Math.floor(Math.random() * 9000));
   net.status = 'Création de la partie…';
   const p = new Peer('iamkart-' + net.code, peerOpts());
   net.peer = p;
   p.on('open', () => { net.status = ''; });
   p.on('connection', (c) => {
-    if (net.conn && net.conn.open) { try { c.close(); } catch (e) {} return; } // duo only
-    netAttach(c);
+    if (net.locked || netGuestCount() >= MAX_PLAYERS - 1) {
+      try { c.on('open', () => { c.send({ t: 'full' }); setTimeout(() => c.close(), 400); }); } catch (e) {}
+      return;
+    }
+    hostAttach(c);
   });
   p.on('call', voiceAnswer);
   p.on('error', (err) => {
@@ -2966,11 +3011,45 @@ function netHost() {
   state = 'mp-host';
 }
 
+function hostAttach(c) {
+  c._pinfo = { char: -1, veh: 0, color: null, ready: false };
+  net.conns.push(c);
+  c.on('open', () => {
+    beep(660, 0.12, 'square', 990);
+    hostRosterChanged();
+  });
+  c.on('data', (m) => { try { netOnData(m, c); } catch (e) { /* malformed */ } });
+  c.on('close', () => hostDropConn(c));
+  c.on('error', () => hostDropConn(c));
+}
+
+function hostDropConn(c) {
+  if (!net.conns.includes(c)) return;
+  const racing = state === 'race' || state === 'countdown' || state === 'finish';
+  net.conns = net.conns.filter((q) => q !== c);
+  if (racing && c._pinfo && c._pinfo.char >= 0) {
+    net.lostSeats.push({ char: c._pinfo.char, t: 0.001 }); // reconnection window
+  } else {
+    hostRosterChanged();
+  }
+}
+
+function hostRosterChanged() {
+  if (!net.isHost) return;
+  const ps = [{ c: menuChar, veh: vehSel, color: COLOR_PALETTE[colorSel], ready: net.hostReady, host: true }];
+  for (const c of net.conns) {
+    if (!c.open || !c._pinfo) continue;
+    ps.push({ c: c._pinfo.char, veh: c._pinfo.veh, color: c._pinfo.color, ready: c._pinfo.ready });
+  }
+  net.roster = ps.map((p2) => Object.assign({}, p2, { me: !!p2.host }));
+  netSend({ t: 'roster', ps });
+}
+
 function netJoinInit() {
   netQuit(true);
   if (typeof Peer === 'undefined') { net.error = 'Réseau indisponible'; state = 'mp'; return; }
   net.active = true; net.isHost = false;
-  net.myChar = 1; net.remoteChar = 0;
+  net.myChar = menuChar = 1;
   net.joinCode = '';
   const p = new Peer(peerOpts());
   net.peer = p;
@@ -2991,26 +3070,26 @@ function netJoinInit() {
 function netConnectTo(code) {
   if (!net.peer || net.peer.destroyed) return;
   net.code = String(code);
-  if (!net.peer.open) { net.pendingConnect = String(code); return; } // connect once registered
+  if (!net.peer.open) { net.pendingConnect = String(code); return; }
   net.status = 'Connexion…';
   const c = net.peer.connect('iamkart-' + code, { reliable: true, serialization: 'json' });
-  if (c) netAttach(c);
+  if (c) guestAttach(c);
 }
 
-function netAttach(c) {
+function guestAttach(c) {
   net.conn = c;
   c.on('open', () => {
     net.lostT = 0; net.retryT = 0; net.error = ''; net.status = '';
     beep(660, 0.12, 'square', 990);
-    if (state === 'mp-host' || state === 'mp-join') {
-      // fresh lobby: the host also picks the cc class, the guest goes straight to the garage
-      net.remoteReady = false;
+    if (state === 'race' || state === 'countdown' || state === 'finish') {
+      netSend({ t: 'resume', c: net.myChar }); // back from a drop mid-race
+    } else if (state === 'mp-join') {
       menuChar = net.myChar;
       resetRace(menuChar);
-      state = net.isHost ? 'cc' : 'char';
+      state = 'char'; // straight to the garage; the host picks cc + map
     }
   });
-  c.on('data', (m) => { try { netOnData(m); } catch (e) { /* malformed */ } });
+  c.on('data', (m) => { try { netOnData(m, null); } catch (e) { /* malformed */ } });
   c.on('close', () => netLost());
   c.on('error', () => netLost());
 }
@@ -3023,26 +3102,28 @@ function netFail(err) {
 function netShutdownPeer() {
   voiceShutdown();
   try { if (net.conn) net.conn.close(); } catch (e) {}
+  for (const c of net.conns) { try { c.close(); } catch (e) {} }
   try { if (net.peer) net.peer.destroy(); } catch (e) {}
-  net.conn = null; net.peer = null;
+  net.conn = null; net.conns = []; net.peer = null;
 }
 
 function netQuit(silent) {
-  if (!silent && net.conn && net.conn.open) netSend({ t: 'bye' });
+  if (!silent) netSend({ t: 'bye' });
   netShutdownPeer();
   net.active = false; net.isHost = false;
   net.status = ''; net.error = ''; net.joinCode = '';
-  net.remoteReady = false; net.lostT = 0; net.retryT = 0;
-  net.pendingConnect = null;
+  net.hostReady = false; net.locked = false;
+  net.roster = []; net.seats = null; net.lostSeats = [];
+  net.lostT = 0; net.retryT = 0; net.pendingConnect = null;
 }
 
 function netRemoteKart() { return karts.find((k) => k.isRemotePlayer); }
 
-// the other player vanished mid-game
+// my link to the game vanished (guest side)
 function netLost() {
-  if (!net.active) return;
+  if (!net.active || net.isHost) return;
   if (state === 'race' || state === 'countdown') {
-    if (net.lostT <= 0) { net.lostT = 0.001; net.retryT = 2.0; } // reconnection window opens
+    if (net.lostT <= 0) { net.lostT = 0.001; net.retryT = 2.0; }
   } else if (state === 'finish') {
     netToAI();
   } else {
@@ -3053,11 +3134,39 @@ function netLost() {
   }
 }
 
-// give every network kart back to the local simulation
+// give every network kart back to the local simulation (guest fallback)
 function netToAI() {
   for (const k of karts) if (k.netDriven) { k.netDriven = false; k.isPlayer = false; k.isRemotePlayer = false; }
   net.aiGoneT = 5;
   netQuit(true);
+}
+
+/* ---- race launch ---- */
+function netLaunchRace() {
+  if (!net.isHost || !netAllReady()) return;
+  net.locked = true;
+  net.myChar = menuChar;
+  // seat assignment: host first, then guests in join order; clashes shift to a free char
+  const taken = new Set();
+  const seats = [];
+  const grab = (want, veh, color) => {
+    let c2 = clamp(want | 0, 0, CHARACTERS.length - 1);
+    while (taken.has(c2)) c2 = (c2 + 1) % CHARACTERS.length;
+    taken.add(c2);
+    seats.push({ c: c2, veh, color });
+    return c2;
+  };
+  grab(menuChar, vehSel, COLOR_PALETTE[colorSel]);
+  for (const c of net.conns) {
+    if (!c.open || !c._pinfo) continue;
+    c._pinfo.char = grab(c._pinfo.char, c._pinfo.veh, c._pinfo.color);
+  }
+  net.seats = seats;
+  for (const c of net.conns) {
+    if (!c.open || !c._pinfo) continue;
+    try { c.send({ t: 'go', map: mapSel, cc: ccSel, you: c._pinfo.char, seats }); } catch (e) {}
+  }
+  duoStartRace();
 }
 
 function duoStartRace() {
@@ -3071,36 +3180,41 @@ function duoStartRace() {
 }
 
 function duoResetRace() {
-  // identical grid on both phones: char 0 on pole, char 1 second, AI behind
-  resetRace(0);
-  const me = karts.find((k) => k.charIdx === net.myChar);
-  const other = karts.find((k) => k.charIdx === net.remoteChar);
-  karts[0].isPlayer = false;
-  me.isPlayer = true;
-  player = me;
-  other.isPlayer = false;
-  other.netDriven = true;
-  other.isRemotePlayer = true;
-  if (!net.isHost) for (const k of karts) if (k !== me && k !== other) k.netDriven = true;
+  resetRace(0); // deterministic grid: char order 0..7 on every phone
+  const seats = net.seats || [];
+  for (const k of karts) { k.isPlayer = false; k.netDriven = false; k.isRemotePlayer = false; k.humanNo = 0; }
+  seats.forEach((s, i) => {
+    const k = karts.find((q) => q.charIdx === s.c);
+    if (!k) return;
+    k.humanNo = i + 1;
+    if (s.c === net.myChar) { k.isPlayer = true; player = k; }
+    else { k.netDriven = true; k.isRemotePlayer = true; }
+  });
+  if (!player) { player = karts[0]; player.isPlayer = true; } // safety net
+  if (!net.isHost) for (const k of karts) if (!k.isPlayer && !k.isRemotePlayer) k.netDriven = true;
   camAngle = player.angle;
 }
 
 function duoRematch() {
-  if (!net.active || !(net.conn && net.conn.open)) return;
-  netSend({ t: 'rematch' });
-  duoStartRace();
+  if (!net.active) return;
+  if (net.isHost) netLaunchRace();
+  else netSend({ t: 'rematch' });
 }
 
-function netOnData(m) {
+/* ---- message handling (fromConn is set on the host side) ---- */
+function netOnData(m, fromConn) {
   if (!m || typeof m !== 'object') return;
-  if (m.t === 'st') {                       // the other player's kart
-    const k = netRemoteKart();
+  if (m.t === 'pst') {                      // another player's kart
+    const c2 = m.c | 0;
+    if (net.isHost && fromConn) netRelay(m, fromConn);
+    if (net.isHost && fromConn && fromConn._pinfo && fromConn._pinfo.char !== c2) return; // spoof guard
+    const k = karts.find((q) => q.charIdx === c2 && q.isRemotePlayer);
     if (k) {
       k.netT = { x: +m.x, y: +m.y, a: +m.a, s: +m.s, age: 0 };
       k.lap = m.l | 0; k.trackIdx = (m.ti | 0) % N;
       k.key = k.lap * N + k.trackIdx;
       k.spinT = +m.sp || 0; k.starT = +m.st || 0; k.boostT = +m.b || 0;
-      k.coins = m.c | 0; k.steerVis = +m.sv || 0;
+      k.coins = m.co | 0; k.steerVis = +m.sv || 0;
     }
   } else if (m.t === 'ai') {                // host's AI fleet (guest side)
     if (!net.isHost && Array.isArray(m.ks)) for (const s of m.ks) {
@@ -3113,37 +3227,65 @@ function netOnData(m) {
         if (+s.ft) k.finishTime = +s.ft;
       }
     }
-  } else if (m.t === 'ready') {             // the other player picked veh + color + pilot
-    net.remoteVeh = clamp(m.veh | 0, 0, VEHICLES.length - 1);
-    net.remoteColor = typeof m.color === 'string' ? m.color : null;
-    if (m.char !== undefined) net.remoteChar = clamp(m.char | 0, 0, CHARACTERS.length - 1);
-    net.remoteReady = true;
-    ensureKartMeshes();
-  } else if (m.t === 'go') {                // host launches with final pilot assignments
+  } else if (m.t === 'ready') {             // a guest picked veh + color + pilot
+    if (net.isHost && fromConn) {
+      fromConn._pinfo = {
+        char: clamp(m.char | 0, 0, CHARACTERS.length - 1),
+        veh: clamp(m.veh | 0, 0, VEHICLES.length - 1),
+        color: typeof m.color === 'string' ? m.color : null,
+        ready: true,
+      };
+      hostRosterChanged();
+      ensureKartMeshes();
+    }
+  } else if (m.t === 'roster') {            // lobby state from the host
+    if (!net.isHost && Array.isArray(m.ps)) {
+      net.roster = m.ps.map((p2) => ({
+        c: p2.c | 0, veh: p2.veh | 0, color: typeof p2.color === 'string' ? p2.color : null,
+        ready: !!p2.ready, me: false,
+      }));
+      ensureKartMeshes();
+    }
+  } else if (m.t === 'go') {                // host launches with final seats
     if (!net.isHost) {
       mapSel = clamp(m.map | 0, 0, MAPS.length - 1);
       ccSel = clamp(m.cc | 0, 0, CC_CLASSES.length - 1);
       ccMul = CC_CLASSES[ccSel].mul;
-      if (m.hc !== undefined) {
-        net.remoteChar = clamp(m.hc | 0, 0, CHARACTERS.length - 1);
-        net.myChar = clamp(m.gc | 0, 0, CHARACTERS.length - 1);
-        menuChar = net.myChar;
-      }
+      net.myChar = clamp(m.you | 0, 0, CHARACTERS.length - 1);
+      menuChar = net.myChar;
+      net.seats = Array.isArray(m.seats) ? m.seats.map((s) => ({
+        c: clamp(s.c | 0, 0, CHARACTERS.length - 1),
+        veh: clamp(s.veh | 0, 0, VEHICLES.length - 1),
+        color: typeof s.color === 'string' ? s.color : null,
+      })) : [];
       duoStartRace();
     }
   } else if (m.t === 'item') {
+    if (net.isHost && fromConn) netRelay(m, fromConn);
     netSpawnItem(m);
   } else if (m.t === 'fin') {
-    const k = netRemoteKart();
+    if (net.isHost && fromConn) netRelay(m, fromConn);
+    const k = karts.find((q) => q.charIdx === (m.c | 0) && q.isRemotePlayer);
     if (k && !k.finishTime) { k.finishTime = +m.time || raceTime; k.lap = LAPS + 1; }
   } else if (m.t === 'rematch') {
-    if (state === 'finish') duoStartRace();
+    if (net.isHost && state === 'finish') netLaunchRace();
+  } else if (m.t === 'resume') {            // a guest came back mid-race
+    if (net.isHost && fromConn) {
+      const c2 = clamp(m.c | 0, 0, CHARACTERS.length - 1);
+      net.lostSeats = net.lostSeats.filter((l) => l.char !== c2);
+      fromConn._pinfo = { char: c2, veh: 0, color: null, ready: true };
+    }
+  } else if (m.t === 'full') {
+    net.error = 'Partie pleine (8 joueurs max)';
+    netQuit(true);
+    net.active = false;
+    state = 'mp';
   } else if (m.t === 'bye') {
-    netLost();
+    if (!net.isHost) netLost();
   }
 }
 
-// spawn the projectile the other simulation just fired
+// spawn the projectile another simulation just fired
 function netSpawnItem(m) {
   const owner = karts.find((k) => k.charIdx === (m.oc | 0)) || null;
   const ti = (m.ti | 0) % N;
@@ -3170,7 +3312,7 @@ function netSpawnItem(m) {
     scene.add(mesh);
     bananas.push({ x: +m.x, y: +m.y, mesh });
   } else if (m.kind === 'bolt') {
-    // each side applies the lightning to its own kart only
+    // each phone applies the lightning to its own kart only
     if (player && player.key > (m.ok | 0) && player.spinT <= 0 && player.starT <= 0) {
       player.spinT = 1.1; player.speed *= 0.35;
     }
@@ -3200,31 +3342,46 @@ function netLerpKart(k, dt) {
   k.key = k.lap * N + k.trackIdx;
 }
 
-// periodic sends: my kart at 15 Hz, host AI fleet at 10 Hz, reconnection retries
+// periodic sends + reconnection windows
 function netTick(dt) {
   if (micBtn) {
-    const show = net.active && net.conn && net.conn.open;
+    const show = netLinkUp();
     if ((micBtn.style.display === 'none') === show) updateMicBtn();
   }
   if (net.aiGoneT > 0) net.aiGoneT -= dt;
   if (!net.active) return;
-  if (net.lostT > 0) {
+  // guest: reconnection window during a race
+  if (!net.isHost && net.lostT > 0) {
     net.lostT += dt;
     net.retryT -= dt;
     if (net.conn && net.conn.open) { net.lostT = 0; }
-    else if (!net.isHost && net.retryT <= 0 && net.lostT < 15) { net.retryT = 2.5; netConnectTo(net.code); }
+    else if (net.retryT <= 0 && net.lostT < 15) { net.retryT = 2.5; netConnectTo(net.code); }
     else if (net.lostT >= 15) { netToAI(); return; }
+  }
+  // host: per-seat reconnection windows
+  if (net.isHost && net.lostSeats.length) {
+    for (const l of net.lostSeats) l.t += dt;
+    const gone = net.lostSeats.filter((l) => l.t >= 15);
+    if (gone.length) {
+      for (const g2 of gone) {
+        const k = karts.find((q) => q.charIdx === g2.char);
+        if (k) { k.netDriven = false; k.isRemotePlayer = false; } // AI takes the wheel
+      }
+      net.lostSeats = net.lostSeats.filter((l) => l.t < 15);
+      net.aiGoneT = 5;
+    }
   }
   if (state !== 'race' && state !== 'countdown' && state !== 'finish') return;
   net.stTimer -= dt;
   if (net.stTimer <= 0 && player) {
     net.stTimer = 1 / 15;
     const k = player;
-    netSend({
-      t: 'st', x: +k.x.toFixed(1), y: +k.y.toFixed(1), a: +k.angle.toFixed(3), s: +k.speed.toFixed(1),
+    const msg = {
+      t: 'pst', c: net.myChar, x: +k.x.toFixed(1), y: +k.y.toFixed(1), a: +k.angle.toFixed(3), s: +k.speed.toFixed(1),
       l: k.lap, ti: k.trackIdx, sp: +k.spinT.toFixed(2), st: +k.starT.toFixed(2), b: +k.boostT.toFixed(2),
-      c: k.coins, sv: +k.steerVis.toFixed(2),
-    });
+      co: k.coins, sv: +k.steerVis.toFixed(2),
+    };
+    netSend(msg);
   }
   if (net.isHost) {
     net.aiTimer -= dt;
@@ -3938,11 +4095,11 @@ function drawHUD() {
   for (const k of karts) {
     const mx = HW - 94 + k.x / 2048 * 84, my = mmY + k.y / 2048 * 84;
     if (k.isRemotePlayer) {
-      // Joueur 2 : gros point doré cerclé + « 2 »
+      // autre joueur : gros point doré cerclé + numéro
       hctx.fillStyle = '#ffd24a';
       hctx.strokeStyle = '#fff'; hctx.lineWidth = 1.4;
       hctx.beginPath(); hctx.arc(mx, my, 4.2, 0, TAU); hctx.fill(); hctx.stroke();
-      text('2', mx, my - 5.5, 8, 'center', '#16161e');
+      text(String(k.humanNo || 2), mx, my - 5.5, 8, 'center', '#16161e');
     } else {
       hctx.fillStyle = k.isPlayer ? '#fff' : CHARACTERS[k.charIdx].color;
       hctx.beginPath(); hctx.arc(mx, my, k.isPlayer ? 3 : 2.2, 0, TAU); hctx.fill();
@@ -3958,7 +4115,7 @@ function drawHUD() {
       ly += 12;
     });
     const rk = netRemoteKart();
-    if (rk) {
+    if (rk && humans.length === 2) {
       const ahead = rk.key > player.key;
       text(ahead ? '▲ J2 devant' : '▼ J2 derrière', HW - 52, ly + 2, 9, 'center', ahead ? '#ffb04a' : '#6ede3a');
     }
@@ -4061,12 +4218,23 @@ function drawMpMenu() {
 function drawMpHost() {
   hctx.fillStyle = 'rgba(8,5,25,0.6)';
   hctx.fillRect(0, 0, HW, HB);
-  text('TON CODE DE PARTIE', HW / 2, MY(22), 20, 'center', '#40e0ff');
-  text((net.code || '····').split('').join('  '), HW / 2, MY(64), 56, 'center', '#ffd24a');
-  text("Donne ce code à l'autre joueur", HW / 2, MY(148), 14, 'center', '#fff');
-  const dots = '.'.repeat(1 + ((perfNow / 400) | 0) % 3);
-  text((net.status || 'En attente du joueur 2') + dots, HW / 2, MY(178), 13, 'center', '#9fe');
-  if (net.error) text('⚠ ' + net.error, HW / 2, MY(210), 12, 'center', '#ff7c6a');
+  text('TON CODE DE PARTIE', HW / 2, MY(6), 20, 'center', '#40e0ff');
+  text((net.code || '····').split('').join('  '), HW / 2, MY(34), 52, 'center', '#ffd24a');
+  text('Donne ce code aux autres joueurs (8 max)', HW / 2, MY(96), 13, 'center', '#fff');
+  const n = netGuestCount();
+  text('Toi (hôte) — prêt à accueillir', HW / 2, MY(122), 12, 'center', '#9fe');
+  for (let i = 0; i < n; i++) {
+    const c = net.conns.filter((q) => q.open)[i];
+    const ok = c && c._pinfo && c._pinfo.ready;
+    text(`Joueur ${i + 2} ${ok ? '✓ prêt' : '— connecté'}`, HW / 2, MY(140 + i * 16), 12, 'center', ok ? '#6ede3a' : '#ffd24a');
+  }
+  if (n > 0) {
+    mpButton(MY(196), `ON EST AU COMPLET (${n + 1} joueurs) ▶`, { t: 'mp-complete' });
+  } else {
+    const dots = '.'.repeat(1 + ((perfNow / 400) | 0) % 3);
+    text((net.status || 'En attente des joueurs') + dots, HW / 2, MY(200), 13, 'center', '#9fe');
+  }
+  if (net.error) text('⚠ ' + net.error, HW / 2, MY(232), 12, 'center', '#ff7c6a');
   drawBackBtn();
 }
 
@@ -4103,6 +4271,7 @@ function drawMpWait() {
   hctx.fillRect(0, 0, HW, HB);
   const dots = '.'.repeat(1 + ((perfNow / 400) | 0) % 3);
   text('PRÊT !', HW / 2, MY(60), 26, 'center', '#6ede3a');
+  if (net.roster.length) text(`${net.roster.length} joueur${net.roster.length > 1 ? 's' : ''} dans la partie`, HW / 2, MY(84), 12, 'center', '#9fe');
   text("L'hôte choisit le circuit" + dots, HW / 2, MY(110), 16, 'center', '#fff');
   text('La course démarre toute seule, tiens-toi prêt 🏁', HW / 2, MY(146), 12, 'center', '#9ab');
   drawBackBtn();
@@ -4178,8 +4347,11 @@ function drawPilotSelect() {
   hitR(HW / 2 - 180, MY(90), 100, 110, { t: 'nav', d: -1 });
   hitR(HW / 2 + 80, MY(90), 100, 110, { t: 'nav', d: 1 });
   text(`${menuChar + 1} / ${CHARACTERS.length}`, HW / 2, MY(160), 11, 'center', '#9ab');
-  if (net.active && net.remoteReady)
-    text(`Joueur 2 : ${CHARACTERS[net.remoteChar].name}`, HW / 2, MY(200), 12, 'center', '#9fe');
+  if (net.active && net.roster.length > 1) {
+    const others = net.roster.filter((p) => p.c !== menuChar && p.c >= 0)
+      .map((p) => CHARACTERS[p.c].name).join(' · ');
+    if (others) text('Autres joueurs : ' + others, HW / 2, MY(200), 12, 'center', '#9fe');
+  }
   text('← glisse pour changer →', HW / 2, MY(232), 11, 'center', '#8ac');
   drawGoButton('CONTINUER ▶');
 }
@@ -4222,7 +4394,7 @@ function drawMapSelect() {
       hctx.strokeRect(x - 2, y - 2, th + 4, th + 4);
     }
   });
-  if (net.active && !net.remoteReady) text('En attente du joueur 2…', HW / 2, HB - 42, 14, 'center', '#ffd24a');
+  if (net.active && !netAllReady()) text('En attente des autres joueurs…', HW / 2, HB - 42, 14, 'center', '#ffd24a');
   else drawGoButton('C’EST PARTI ! 🏁');
 }
 
@@ -4255,7 +4427,7 @@ function drawFinish() {
     const big = net.active;
     const y = OY + (big ? 70 : 58) + i * (big ? 34 : 22);
     text(PLACE_TXT[place], HW / 2 - 130, y, big ? 20 : 14, 'left', PLACE_COL[place]);
-    text((k.isPlayer ? ch.name + '  ★ toi' : big ? ch.name + '  (joueur 2)' : kartName(k)), HW / 2 - 70, y, big ? 18 : 14, 'left', k.isPlayer ? '#fff' : ch.color);
+    text((k.isPlayer ? ch.name + '  ★ toi' : big ? ch.name + `  (J${k.humanNo || 2})` : kartName(k)), HW / 2 - 70, y, big ? 18 : 14, 'left', k.isPlayer ? '#fff' : ch.color);
     if (k.finishTime) text(fmtTime(k.finishTime), HW / 2 + 130, y, big ? 16 : 12, 'right', '#cfe');
     else if (big) text('en course…', HW / 2 + 130, y, 12, 'right', '#9ab');
   });
@@ -4268,8 +4440,8 @@ function drawFinish() {
     text(`Meilleur tour : ${fmtTime(best)}`, HW / 2, HB - 44, 11, 'center', '#9fe');
   }
   if (net.active) {
-    const rk = netRemoteKart();
-    if (rk && !rk.finishTime) text("L'autre joueur roule encore…", HW / 2, HB - 78, 11, 'center', '#9fe');
+    const still = netHumans().filter((k) => !k.isPlayer && !k.finishTime).length;
+    if (still) text(still === 1 ? 'Un joueur roule encore…' : `${still} joueurs roulent encore…`, HW / 2, HB - 78, 11, 'center', '#9fe');
     if (!pendingRecord) {
       const w = 210, h = 32, x = HW / 2 - w / 2, y = HB - 40;
       hctx.fillStyle = 'rgba(30,140,80,0.8)';
@@ -4356,6 +4528,12 @@ function frame(t) {
     } else if (a.t === 'duo') { net.error = ''; state = 'mp'; beep(560, 0.08, 'square');
     } else if (a.t === 'mp-create') { netHost(); beep(560, 0.08, 'square');
     } else if (a.t === 'mp-goto-join') { netJoinInit(); beep(560, 0.08, 'square');
+    } else if (a.t === 'mp-complete') {
+      if (net.isHost && netGuestCount() > 0) {
+        net.locked = true; // plus personne ne peut rejoindre
+        state = 'cc';
+        beep(560, 0.08, 'square');
+      }
     } else if (a.t === 'digit') {
       if (net.joinCode.length < 4) { net.joinCode += String(a.d); beep(660, 0.05, 'square'); }
       if (net.joinCode.length === 4) { net.error = ''; netConnectTo(net.joinCode); }
@@ -4446,8 +4624,11 @@ function frame(t) {
     if (itemPressed) { state = 'color'; beep(360, 0.08, 'square'); }
     else if (startPressed) {
       if (net.active) {
-        netSend({ t: 'ready', veh: vehSel, color: COLOR_PALETTE[colorSel], char: menuChar });
-        state = net.isHost ? 'map' : 'mp-wait';
+        if (net.isHost) { net.hostReady = true; hostRosterChanged(); state = 'map'; }
+        else {
+          netSend({ t: 'ready', veh: vehSel, color: COLOR_PALETTE[colorSel], char: menuChar });
+          state = 'mp-wait';
+        }
       } else state = 'map';
       beep(560, 0.08, 'square');
     }
@@ -4464,15 +4645,7 @@ function frame(t) {
     if (itemPressed) { state = 'color'; beep(360, 0.08, 'square'); }
     else if (startPressed) {
       if (net.active) {
-        if (net.remoteReady && net.conn && net.conn.open) {
-          // same pilot picked twice? the guest gets the next free seat
-          net.myChar = menuChar;
-          let gc = net.remoteChar;
-          if (gc === net.myChar) gc = (gc + 1) % CHARACTERS.length;
-          net.remoteChar = gc;
-          netSend({ t: 'go', map: mapSel, cc: ccSel, hc: net.myChar, gc });
-          duoStartRace();
-        }
+        netLaunchRace();
       } else {
         resetRace(menuChar);
         state = 'countdown';
@@ -4487,6 +4660,7 @@ function frame(t) {
     if (countdownT >= 3) { raceTime = 0; state = 'race'; }
   } else if (state === 'mp' || state === 'mp-host' || state === 'mp-join' || state === 'mp-wait') {
     if (itemPressed) uiQueue.push({ t: 'back' });
+    if (startPressed && state === 'mp-host') uiQueue.push({ t: 'mp-complete' });
   }
 
   netTick(dt);
@@ -4505,7 +4679,7 @@ function frame(t) {
       pendingRecord = net.active ? null : { time: player.finishTime, laps: [...player.lapTimes] };
       nameAsked = false;
       newRecordRank = -1;
-      if (net.active) netSend({ t: 'fin', time: player.finishTime });
+      if (net.active) netSend({ t: 'fin', c: net.myChar, time: player.finishTime });
       spawnConfetti();
       beep(523, 0.15, 'square'); beep(659, 0.15, 'square');
       setTimeout(() => beep(784, 0.3, 'square', 1046), 180);
@@ -4617,12 +4791,15 @@ window.IAM = {
   get net() {
     return {
       active: net.active, isHost: net.isHost, code: net.code,
-      open: !!(net.conn && net.conn.open), status: net.status, error: net.error,
-      remoteReady: net.remoteReady, lostT: net.lostT,
+      open: netLinkUp(), status: net.status, error: net.error,
+      remoteReady: netAllReady(), players: netPlayerCount(), guests: netGuestCount(),
+      locked: net.locked, lostT: net.lostT,
+      roster: net.roster.map((p) => ({ c: p.c, ready: p.ready })),
       voiceSending: net.voice ? net.voice.sending : false,
       voiceIncoming: net.voice ? net.voice.incoming : 0,
     };
   },
+  mpComplete() { uiQueue.push({ t: 'mp-complete' }); },
   voiceToggle() { voiceToggle(); },
   start(mapIdx = 0, ccIdx = 2, charIdx = 0) {
     menuChar = charIdx; mapSel = mapIdx; ccSel = ccIdx;

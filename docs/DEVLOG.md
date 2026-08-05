@@ -16,6 +16,14 @@ Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker
 - Le micro se coupe proprement à la fin de la partie ou si la connexion tombe.
 - Testé de bout en bout : deux navigateurs à micros simulés, flux vocal reçu dans les deux sens, on/off propre — 7/7.
 
+## v26 — Lobby jusqu'à 8 joueurs
+
+- **Une partie, jusqu'à 8 joueurs** : l'hôte crée le code, chacun rejoint, l'écran hôte liste les joueurs en direct (« Joueur 2 ✓ prêt… ») et un gros bouton **« ON EST AU COMPLET (N joueurs) ▶ »** verrouille la partie et lance les choix.
+- **Topologie en étoile** : chaque invité ne parle qu'à l'hôte qui relaie positions (15 Hz), objets et arrivées aux autres — aucun serveur, toujours du pair-à-pair.
+- Sièges attribués au départ (conflits de pilotes résolus), **badges numérotés** sur la minimap, mini-classement et écran d'arrivée pour N joueurs.
+- Vocal en étoile : tous parlent avec l'hôte.
+- Déconnexion par siège : 15 s de reconnexion, sinon l'IA reprend ce volant sans arrêter la course ; « Partie pleine » au 9ᵉ.
+
 ## v25 — Menus : plus d'overlap, vraie pleine hauteur
 
 - Les titres des menus démarrent désormais **sous** la rangée de boutons (GYRO/son/AUTO) grâce à la même sonde safe-area que le HUD de course — fini « CHOISIS TON VÉHICULE » caché derrière les boutons.

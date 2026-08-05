@@ -43,6 +43,19 @@
   </div>
   <button id="btnAudio" aria-label="Couper ou activer le son">🔊</button>
 
+  <!-- Post-race name entry for the local leaderboard -->
+  <div id="name-overlay" hidden>
+    <div id="name-panel">
+      <h3>🏁 Ton prénom pour le classement</h3>
+      <div id="name-chips"></div>
+      <input id="name-input" maxlength="12" autocomplete="off" placeholder="Tape ton prénom…">
+      <div id="name-actions">
+        <button id="name-skip">Passer</button>
+        <button id="name-save">SAUVER ✔</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Install banner (shown only outside the installed app) -->
   <div id="install-banner" hidden>
     <span id="install-text"></span>

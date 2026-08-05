@@ -3299,6 +3299,7 @@ function peerOpts() {
         { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
         { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
         { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+        { urls: 'turns:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
       ],
     },
   };
@@ -3521,8 +3522,25 @@ function netConnectTo(code) {
 function guestAttach(c) {
   net.conn = c;
   c.on('open', () => {
-    net.connectAt = 0;
+    net.connectAt = 0; net.joinTries = 0;
     net.lostT = 0; net.retryT = 0; net.error = ''; net.status = '';
+    // which kind of tunnel did we get? (shown in the lobby)
+    try {
+      const pc = c.peerConnection;
+      if (pc && pc.getStats) setTimeout(() => {
+        pc.getStats().then((stats) => {
+          let relay = false;
+          stats.forEach((r) => {
+            if (r.type === 'candidate-pair' && (r.selected || r.nominated) && r.state === 'succeeded') {
+              stats.forEach((c2) => {
+                if (c2.id === r.localCandidateId && c2.candidateType === 'relay') relay = true;
+              });
+            }
+          });
+          net.tunnel = relay ? 'relais mondial 🌍' : 'direct ⚡';
+        }).catch(() => {});
+      }, 1200);
+    } catch (e) {}
     beep(660, 0.12, 'square', 990);
     if (state === 'race' || state === 'countdown' || state === 'finish') {
       netSend({ t: 'resume', c: net.myChar }); // back from a drop mid-race
@@ -3792,13 +3810,20 @@ function netLerpKart(k, dt) {
 function netTick(dt) {
   // lobby watchdogs: never leave the kids staring at a stuck screen
   if (net.active && state === 'mp-join' && net.conn && !net.conn.open && net.connectAt) {
-    if (performance.now() - net.connectAt > 14000) {
-      net.connectAt = 0;
+    if (performance.now() - net.connectAt > 12000) {
       try { net.conn.close(); } catch (e) {}
       net.conn = null;
-      net.joinCode = '';
-      net.status = '';
-      net.error = 'Connexion impossible — re-tape le code pour réessayer';
+      net.connectAt = 0;
+      net.joinTries = (net.joinTries || 0) + 1;
+      if (net.joinTries <= 2 && net.code) {
+        net.status = `Nouvelle tentative (${net.joinTries + 1}/3)…`;
+        netConnectTo(net.code); // fresh tunnel attempt, relays included
+      } else {
+        net.joinTries = 0;
+        net.joinCode = '';
+        net.status = '';
+        net.error = 'Connexion impossible — re-tape le code pour réessayer';
+      }
     }
   }
   if (net.active && net.isHost && state === 'mp-host' && net.peer) {
@@ -4875,6 +4900,7 @@ function drawMpWait() {
   drawNameChip();
   text('PRÊT !', HW / 2, MY(60), 26, 'center', '#6ede3a');
   if (net.roster.length) text(`${net.roster.length} joueur${net.roster.length > 1 ? 's' : ''} dans la partie`, HW / 2, MY(84), 12, 'center', '#9fe');
+  if (net.tunnel) text('Tunnel : ' + net.tunnel, HW / 2, MY(104), 10, 'center', '#8ac');
   text("L'hôte choisit le circuit" + dots, HW / 2, MY(110), 16, 'center', '#fff');
   text('La course démarre toute seule, tiens-toi prêt 🏁', HW / 2, MY(146), 12, 'center', '#9ab');
   drawBackBtn();

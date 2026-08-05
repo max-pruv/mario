@@ -2,6 +2,13 @@
 
 Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker (`sw.js`) : chaque bump déclenche la mise à jour automatique de tous les clients installés.
 
+## v13 — Bords de piste nets, menus tactiles, textures fines, bouton son
+
+- **Bord route/pelouse enfin défini** : le terrain suit désormais le dévers de la route et reste strictement sous l'asphalte ; une bande d'herbe cousue à la bordure (ribbon) dessine une lisière nette — plus d'herbe qui « pousse sur la route ».
+- **Menus entièrement tactiles** : taper directement sur les lignes de cylindrée, les tuiles de pilotes, les vignettes de circuits, les flèches ◀ ▶ et « ‹ retour » — plus besoin d'enchaîner les « next ». Les taps sont latchés (jamais perdus entre deux frames).
+- **Textures plus fines** : asphalte 512px avec traces de pneus et microfissures, herbe 512px avec brins dessinés, façades 512px avec reflets de vitres, **rez-de-chaussée commerçants éclairés** (vitrines, portes, auvents rayés) sur les immeubles.
+- **Bouton son 🔊/🔇** toujours visible, préférence mémorisée — moteur, bips et jingles coupables d'un tap.
+
 ## v12 — Correctif : rendu étiré en paysage (iOS)
 
 - À la rotation, Safari iOS déclenche `resize` avant d'avoir fini son layout : le buffer de rendu restait au format portrait, étiré sur l'écran paysage (proportions fausses).

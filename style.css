@@ -100,6 +100,26 @@ html, body {
 }
 #btnGyro.on { background: rgba(30,160,220,.65); border-color: #40e0ff; }
 
+/* ---------- Audio toggle (always visible) ---------- */
+#btnAudio {
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top));
+  left: max(150px, calc(env(safe-area-inset-left) + 150px));
+  z-index: 10;
+  border: 2px solid rgba(255,255,255,.5);
+  border-radius: 18px;
+  background: rgba(20,20,40,.55);
+  color: #fff;
+  font: bold 15px/1 system-ui, sans-serif;
+  padding: 8px 12px;
+  touch-action: none;
+  -webkit-user-select: none; user-select: none;
+}
+@media (pointer: fine) {
+  #btnGyro { display: none; }
+  #btnAudio { left: max(10px, env(safe-area-inset-left)); }
+}
+
 /* ---------- Install banner ---------- */
 #install-banner {
   position: fixed;

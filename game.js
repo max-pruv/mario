@@ -263,12 +263,37 @@ function getPlayerSteer() {
 }
 
 const glCanvas = document.getElementById('game');
-glCanvas.addEventListener('pointerdown', () => { input.start = true; unlockAudio(); });
+// tappable HUD regions (rebuilt every frame by the menu screens)
+let hudRegions = [];
+const uiQueue = [];
+let tapStart = false;
+function hitR(x, y, w, h, action) { hudRegions.push({ x, y, w, h, action }); }
+glCanvas.addEventListener('pointerdown', (e) => {
+  unlockAudio();
+  const r = glCanvas.getBoundingClientRect();
+  const x = (e.clientX - r.left) / r.width * HW;
+  const y = (e.clientY - r.top) / r.height * HB;
+  const hit = hudRegions.find(rg => x >= rg.x && x <= rg.x + rg.w && y >= rg.y && y <= rg.y + rg.h);
+  if (hit) { uiQueue.push(hit.action); return; }
+  tapStart = true; // latched so a quick tap is never missed between frames
+  input.start = true;
+});
 glCanvas.addEventListener('pointerup', () => { input.start = false; });
 
 /* ---------------- Audio ---------------- */
 let AC = null, engineOsc = null, engineGain = null;
 let muted = false;
+try { muted = localStorage.getItem('iam-muted') === '1'; } catch (e) {}
+const audioBtn = document.getElementById('btnAudio');
+function updateAudioBtn() { if (audioBtn) audioBtn.textContent = muted ? '🔇' : '🔊'; }
+if (audioBtn) audioBtn.addEventListener('click', () => {
+  muted = !muted;
+  try { localStorage.setItem('iam-muted', muted ? '1' : '0'); } catch (e) {}
+  unlockAudio();
+  updateAudioBtn();
+  if (!muted) beep(660, 0.1, 'square', 990);
+});
+updateAudioBtn();
 function unlockAudio() {
   if (AC) { if (AC.state === 'suspended') AC.resume(); return; }
   try {
@@ -367,18 +392,37 @@ const glowOrange = radialSprite('rgba(255,160,60,0.9)');
 const glowLime = radialSprite('rgba(150,255,80,0.9)');
 const glowWhite = radialSprite('rgba(255,255,255,0.8)');
 
-const roadTex = canvasTexture(256, (g) => {
-  g.fillStyle = '#4a4a54'; g.fillRect(0, 0, 256, 256);
-  for (let i = 0; i < 1400; i++) {
-    g.fillStyle = i % 2 ? 'rgba(255,255,255,0.045)' : 'rgba(0,0,0,0.12)';
-    g.fillRect(Math.random() * 256, Math.random() * 256, 2, 2);
+const roadTex = canvasTexture(512, (g) => {
+  g.fillStyle = '#4a4a54'; g.fillRect(0, 0, 512, 512);
+  // fine aggregate
+  for (let i = 0; i < 5200; i++) {
+    g.fillStyle = i % 2 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.13)';
+    g.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
+  }
+  // tire wear lanes (darker where the karts roll)
+  for (const cx of [150, 362]) {
+    const wear = g.createLinearGradient(cx - 42, 0, cx + 42, 0);
+    wear.addColorStop(0, 'rgba(0,0,0,0)');
+    wear.addColorStop(0.5, 'rgba(0,0,0,0.16)');
+    wear.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = wear;
+    g.fillRect(cx - 42, 0, 84, 512);
+  }
+  // faint cracks
+  g.strokeStyle = 'rgba(0,0,0,0.14)'; g.lineWidth = 1.5;
+  for (let i = 0; i < 7; i++) {
+    g.beginPath();
+    let x = Math.random() * 512, y = Math.random() * 512;
+    g.moveTo(x, y);
+    for (let j = 0; j < 5; j++) { x += (Math.random() - 0.5) * 60; y += 18 + Math.random() * 26; g.lineTo(x, y); }
+    g.stroke();
   }
   g.fillStyle = '#e8e8ea';
-  g.fillRect(6, 0, 7, 256);
-  g.fillRect(243, 0, 7, 256);
+  g.fillRect(12, 0, 12, 512);
+  g.fillRect(488, 0, 12, 512);
   g.fillStyle = '#ffd24a';
-  g.fillRect(124, 10, 8, 100);
-  g.fillRect(124, 146, 8, 100);
+  g.fillRect(249, 20, 14, 200);
+  g.fillRect(249, 292, 14, 200);
 }, true);
 
 const curbTex = canvasTexture(64, (g) => {
@@ -1146,15 +1190,25 @@ function buildTrack(mapIdx) {
   };
   track.terrainH = terrainH;
 
-  const grassTex = canvasTexture(256, (g) => {
-    g.fillStyle = theme.ground; g.fillRect(0, 0, 256, 256);
-    for (let i = 0; i < 900; i++) {
+  const grassTex = canvasTexture(512, (g) => {
+    g.fillStyle = theme.ground; g.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 3600; i++) {
       g.fillStyle = theme.groundDots[i % 4];
-      g.fillRect(Math.random() * 256, Math.random() * 256, 3, 3);
+      g.fillRect(Math.random() * 512, Math.random() * 512, 3, 3);
     }
-    for (let i = 0; i < 26; i++) {
-      g.fillStyle = 'rgba(20,60,20,0.3)';
-      g.beginPath(); g.arc(Math.random() * 256, Math.random() * 256, 5 + Math.random() * 16, 0, TAU); g.fill();
+    // grass blades
+    g.lineWidth = 1.6; g.lineCap = 'round';
+    for (let i = 0; i < 1400; i++) {
+      const x = Math.random() * 512, y = Math.random() * 512;
+      g.strokeStyle = theme.groundDots[i % 4];
+      g.beginPath();
+      g.moveTo(x, y);
+      g.lineTo(x + (Math.random() - 0.5) * 3, y - 4 - Math.random() * 5);
+      g.stroke();
+    }
+    for (let i = 0; i < 30; i++) {
+      g.fillStyle = 'rgba(20,60,20,0.28)';
+      g.beginPath(); g.arc(Math.random() * 512, Math.random() * 512, 10 + Math.random() * 30, 0, TAU); g.fill();
     }
   }, true);
   grassTex.repeat.set(60, 60);
@@ -1166,7 +1220,7 @@ function buildTrack(mapIdx) {
     const posA = geo.attributes.position;
     // coarse road samples for the flattening pass
     const coarse = [];
-    for (let i = 0; i < N; i += 6) coarse.push(cl[i]);
+    for (let i = 0; i < N; i += 3) coarse.push(cl[i]);
     for (let vi = 0; vi < posA.count; vi++) {
       const wx = posA.getX(vi) + WORLDC;
       const wz = posA.getZ(vi) + WORLDC;
@@ -1176,9 +1230,13 @@ function buildTrack(mapIdx) {
         if (d < bestD) { bestD = d; best = c; }
       }
       const dist = Math.sqrt(bestD);
-      const t = clamp((dist - (HALFW + 26)) / 260, 0, 1);
+      // follow the banked road edge, and keep the dirt strictly below the
+      // asphalt so grass never pokes through the track
+      const lat = (wx - best.x) * best.nx + (wz - best.y) * best.ny;
+      const edgeY = roadY(best, clamp(lat, -HALFW, HALFW)) - 2.2;
+      const t = clamp((dist - (HALFW + 40)) / 300, 0, 1);
       const w = t * t * (3 - 2 * t);
-      posA.setY(vi, lerp(best.h - 0.6, terrainH(wx, wz), w) - 0.15);
+      posA.setY(vi, lerp(edgeY, terrainH(wx, wz), w) - 0.15);
     }
     geo.computeVertexNormals();
     const ground = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
@@ -1220,6 +1278,17 @@ function buildTrack(mapIdx) {
   );
   curbs.receiveShadow = true;
   group.add(curbs);
+  // grass shoulder glued to the curb -> crisp, well-defined track border
+  const shoulder = new THREE.Mesh(
+    ribbon(cl, HALFW + 10, HALFW + 46, 0.06, 60),
+    new THREE.MeshStandardMaterial({
+      map: grassTex, roughness: 1, side: THREE.DoubleSide,
+      color: 0xdddddd,
+      normalMap: groundNormal, normalScale: new THREE.Vector2(0.5, 0.5),
+    })
+  );
+  shoulder.receiveShadow = true;
+  group.add(shoulder);
   if (theme.rails === 'neon') {
     track.neonMat = new THREE.MeshBasicMaterial({
       color: 0x40e0ff, transparent: true, opacity: 0.85,
@@ -1493,7 +1562,8 @@ function buildTrack(mapIdx) {
     const TILE = CELL * 4;    // facade texture holds a 4x4 grid of varied cells
 
     // facade texture per style (4x4 cells so lit/dark windows vary)
-    const facadeTex = canvasTexture(256, (g) => {
+    const facadeTex = canvasTexture(512, (g) => {
+      g.scale(2, 2);
       if (cc.style === 'paris') {
         g.fillStyle = '#d8cab2'; g.fillRect(0, 0, 256, 256);
         for (let i = 0; i < 500; i++) {
@@ -1550,11 +1620,41 @@ function buildTrack(mapIdx) {
             g.fillRect(x, y, 52, 46);
             g.strokeStyle = '#0c0f18'; g.lineWidth = 3;
             g.strokeRect(x, y, 52, 46);
+            g.fillStyle = 'rgba(255,255,255,0.10)'; // glass reflection streak
+            g.beginPath();
+            g.moveTo(x + 6, y + 46); g.lineTo(x + 20, y); g.lineTo(x + 30, y); g.lineTo(x + 16, y + 46);
+            g.closePath(); g.fill();
           }
         }
       }
     }, true);
     disposables.push(facadeTex);
+    // lit ground-floor storefronts shared by every style
+    const storeTex = canvasTexture(256, (g) => {
+      g.fillStyle = '#20242e'; g.fillRect(0, 0, 256, 256);
+      for (let sx = 0; sx < 2; sx++)
+        for (let sy = 0; sy < 2; sy++) {
+          const ox = sx * 128, oy = sy * 128;
+          // awning
+          g.fillStyle = ['#c04848', '#3a7a5a', '#3a5a9a', '#b08030'][(sx + sy * 2) % 4];
+          for (let a = 0; a < 8; a++) {
+            g.fillStyle = a % 2 ? '#f2ede0' : ['#c04848', '#3a7a5a', '#3a5a9a', '#b08030'][(sx + sy * 2) % 4];
+            g.fillRect(ox + a * 16, oy + 10, 16, 22);
+          }
+          // shop window
+          const wg = g.createLinearGradient(ox, oy + 40, ox, oy + 116);
+          wg.addColorStop(0, '#ffe9b8');
+          wg.addColorStop(1, '#c89a50');
+          g.fillStyle = wg;
+          g.fillRect(ox + 10, oy + 40, 74, 76);
+          g.fillStyle = '#141820';
+          g.fillRect(ox + 94, oy + 40, 26, 76); // door
+          g.strokeStyle = '#0e1016'; g.lineWidth = 4;
+          g.strokeRect(ox + 10, oy + 40, 74, 76);
+        }
+    }, true);
+    disposables.push(storeTex);
+    const storeGeos = [];
 
     const facadeGeos = [], roofGeos = [], tileGeos = [], detailGeos = [], signGeos = [];
     const colOf = (hex) => new THREE.Color(hex);
@@ -1622,6 +1722,7 @@ function buildTrack(mapIdx) {
       if (cc.style === 'paris') {
         const w = 120 + crnd() * 90, d = 70 + crnd() * 30;
         pushTint(winBox(w, h, d, bx, h / 2, bz, ry), tint);
+        storeGeos.push(winBox(w + 5, 22, d + 5, bx, 11, bz, ry));
         roofGeos.push(hipRoof(w + 8, 34, d + 8, bx, h + 17, bz, ry)); // mansard
         for (let ch = 0; ch < 3; ch++)
           detailGeos.push(slab(6, 16, 6, bx + (crnd() - 0.5) * w * 0.6, h + 30, bz + (crnd() - 0.5) * d * 0.5, ry));
@@ -1648,6 +1749,7 @@ function buildTrack(mapIdx) {
         } else {
           const w = 110 + crnd() * 80, d = 55 + crnd() * 30;
           pushTint(winBox(w, h, d, bx, h / 2, bz, ry), tint);
+          storeGeos.push(winBox(w + 5, 22, d + 5, bx, 11, bz, ry));
           detailGeos.push(slab(w + 4, 3, d + 4, bx, h + 1.5, bz, ry));
           if (crnd() < 0.5) { // water tank
             detailGeos.push(slab(12, 14, 12, bx + w * 0.2, h + 8, bz, ry));
@@ -1684,6 +1786,16 @@ function buildTrack(mapIdx) {
       group.add(new THREE.Mesh(mergeGeometries(tileGeos), new THREE.MeshStandardMaterial({ color: 0xb85a38, roughness: 0.85 })));
     if (detailGeos.length)
       group.add(new THREE.Mesh(mergeGeometries(detailGeos), new THREE.MeshStandardMaterial({ color: 0x22242e, roughness: 0.7, metalness: 0.3 })));
+    if (storeGeos.length) {
+      // remap store UVs from the facade TILE to the store texture (2x2 shops)
+      const merged = mergeGeometries(storeGeos);
+      const uv = merged.attributes.uv;
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * TILE / 84, uv.getY(i) * TILE / 22);
+      group.add(new THREE.Mesh(merged, new THREE.MeshStandardMaterial({
+        map: storeTex, roughness: 0.6,
+        emissive: 0xffffff, emissiveMap: storeTex, emissiveIntensity: Math.max(0.25, cc.glow * 0.5),
+      })));
+    }
     if (signGeos.length) {
       const signTex = canvasTexture(256, (g) => {
         g.fillStyle = '#0a0a14'; g.fillRect(0, 0, 256, 256);
@@ -2555,7 +2667,8 @@ const mapThumbs = MAPS.map((m) => {
 function stepHeader(step, label) {
   text(`ÉTAPE ${step}/3`, HW / 2, OY + 14, 11, 'center', '#ff50dc');
   text(label, HW / 2, OY + 28, 22, 'center', '#40e0ff');
-  if (step > 1) text('B = retour', 12, OY + 14, 10, 'left', '#9ab');
+  text('‹ retour', 14, OY + 46, 13, 'left', '#cde');
+  hitR(0, OY + 36, 96, 36, { t: 'back' });
 }
 
 function drawTitle() {
@@ -2575,6 +2688,7 @@ function drawCcSelect() {
   CC_CLASSES.forEach((cc, i) => {
     const sel = i === ccSel;
     const y = OY + 84 + i * 52;
+    hitR(HW / 2 - 150, y - 10, 300, 48, { t: 'cc', i });
     if (sel) {
       hctx.fillStyle = 'rgba(64,224,255,0.18)';
       hctx.strokeStyle = '#40e0ff';
@@ -2594,6 +2708,8 @@ function drawCharSelect() {
   const ch = CHARACTERS[menuChar];
   text('◀', HW / 2 - 120, OY + 130, 30, 'center', '#fff');
   text('▶', HW / 2 + 120, OY + 130, 30, 'center', '#fff');
+  hitR(HW / 2 - 165, OY + 100, 90, 95, { t: 'nav', d: -1 });
+  hitR(HW / 2 + 75, OY + 100, 90, 95, { t: 'nav', d: 1 });
   text(ch.name, HW / 2, OY + 62, 26, 'center', ch.color);
   // MK-style character grid
   const tile = 34, gap = 8;
@@ -2603,6 +2719,7 @@ function drawCharSelect() {
     const x = x0 + i * (tile + gap);
     const y = OY + 232;
     const sel = i === menuChar;
+    hitR(x - 4, y - 6, tile + 8, tile + 22, { t: 'char', i });
     hctx.fillStyle = c.color;
     hctx.globalAlpha = sel ? 1 : 0.55;
     hctx.beginPath(); hctx.roundRect(x, y, tile, tile, 8); hctx.fill();
@@ -2629,6 +2746,8 @@ function drawMapSelect() {
   const map = MAPS[mapSel];
   text('◀', HW / 2 - 150, OY + 110, 30, 'center', '#fff');
   text('▶', HW / 2 + 150, OY + 110, 30, 'center', '#fff');
+  hitR(HW / 2 - 195, OY + 80, 90, 100, { t: 'nav', d: -1 });
+  hitR(HW / 2 + 105, OY + 80, 90, 100, { t: 'nav', d: 1 });
   text(map.name.toUpperCase(), HW / 2, OY + 58, 28, 'center', '#ffd24a');
   text(map.desc, HW / 2, OY + 92, 12, 'center', '#cfe');
   hctx.globalAlpha = 0.95;
@@ -2647,6 +2766,7 @@ function drawMapSelect() {
   MAPS.forEach((m, i) => {
     const x = x0 + i * (th + gap);
     const y = OY + 226;
+    hitR(x - 4, y - 4, th + 8, th + 8, { t: 'map', i });
     hctx.globalAlpha = i === mapSel ? 1 : 0.55;
     hctx.drawImage(mapThumbs[i], x, y, th, th);
     hctx.globalAlpha = 1;
@@ -2726,7 +2846,34 @@ function frame(t) {
   lastT = t;
   const tSec = t * 0.001;
 
-  const startPressed = input.start && !prevStart;
+  // taps on HUD widgets (arrows, tiles, rows, thumbnails, back)
+  let uiAct;
+  while ((uiAct = uiQueue.shift())) {
+    const a = uiAct;
+    if (a.t === 'back') {
+      if (state === 'cc') state = 'title';
+      else if (state === 'char') state = 'cc';
+      else if (state === 'map') state = 'char';
+      beep(360, 0.08, 'square');
+    } else if (a.t === 'nav') {
+      const dir = a.d;
+      if (state === 'char') menuChar = (menuChar + CHARACTERS.length + dir) % CHARACTERS.length;
+      else if (state === 'cc') ccSel = (ccSel + CC_CLASSES.length + dir) % CC_CLASSES.length;
+      else if (state === 'map') {
+        mapSel = (mapSel + MAPS.length + dir) % MAPS.length;
+        buildTrack(mapSel);
+        resetRace(menuChar);
+      }
+      beep(480, 0.06, 'square');
+    } else if (a.t === 'cc') { ccSel = a.i; beep(480, 0.06, 'square'); }
+    else if (a.t === 'char') { menuChar = a.i; beep(480, 0.06, 'square'); }
+    else if (a.t === 'map') {
+      if (a.i !== mapSel) { mapSel = a.i; buildTrack(mapSel); resetRace(menuChar); beep(480, 0.06, 'square'); }
+    }
+  }
+
+  const startPressed = (input.start && !prevStart) || tapStart;
+  tapStart = false;
   const effLeft = input.left || joy.value < -0.5;
   const effRight = input.right || joy.value > 0.5;
   const leftPressed = effLeft && !prevLeft;
@@ -2824,6 +2971,7 @@ function frame(t) {
   OY = Math.max(0, Math.round((HB - HH) / 2));
   hctx.setTransform(S, 0, 0, S, 0, 0);
   hctx.clearRect(0, 0, HW, HB);
+  hudRegions = [];
   if (state === 'title') drawTitle();
   else if (state === 'cc') drawCcSelect();
   else if (state === 'char') drawCharSelect();
@@ -2870,6 +3018,7 @@ window.IAM = {
   get ccSel() { return ccSel; },
   CHARACTERS, MAPS,
   records: loadRecords,
+  get hud() { return { HW, HB, OY }; },
   makePlayerAI() { if (player) player.isPlayer = false; },
   start(mapIdx = 0, ccIdx = 2, charIdx = 0) {
     menuChar = charIdx; mapSel = mapIdx; ccSel = ccIdx;

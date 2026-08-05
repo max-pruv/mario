@@ -5081,7 +5081,7 @@ window.IAM = {
       active: net.active, isHost: net.isHost, code: net.code,
       open: netLinkUp(), status: net.status, error: net.error,
       remoteReady: netAllReady(), players: netPlayerCount(), guests: netGuestCount(),
-      locked: net.locked, lostT: net.lostT,
+      locked: net.locked, lostT: net.lostT, lostSeats: net.lostSeats.length,
       roster: net.roster.map((p) => ({ c: p.c, ready: p.ready })),
       voiceSending: net.voice ? net.voice.sending : false,
       voiceIncoming: net.voice ? net.voice.incoming : 0,

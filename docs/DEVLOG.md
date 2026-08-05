@@ -2,6 +2,12 @@
 
 Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker (`sw.js`) : chaque bump déclenche la mise à jour automatique de tous les clients installés.
 
+## v14 — Horizon en vraie 3D + bouton recommencer
+
+- **Fini le fond carton-pâte** : une chaîne de ~40 montagnes low-poly 3D entoure chaque monde (parallaxe réelle, fondu dans la brume, sommets enneigés sur Néon/Paris/Biarritz, masquées côté océan sur les cartes littorales).
+- Ciel repeint : crêtes irrégulières multi-fréquences fondues dans un voile de brume à l'horizon, au lieu des deux bandes plates.
+- **Bouton ↻** au HUD (et touche R) pour recommencer la course depuis zéro à tout moment — retour au décompte, chrono et positions réinitialisés.
+
 ## v13 — Bords de piste nets, menus tactiles, textures fines, bouton son
 
 - **Bord route/pelouse enfin défini** : le terrain suit désormais le dévers de la route et reste strictement sous l'asphalte ; une bande d'herbe cousue à la bordure (ribbon) dessine une lisière nette — plus d'herbe qui « pousse sur la route ».

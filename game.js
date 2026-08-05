@@ -62,7 +62,7 @@ const MAPS = [
       hemi: [0xb090e0, 0x3a5a3a, 1.05], sunL: [0xffd9a0, 2.4],
       ground: '#3f7a3f', groundDots: ['#356a35', '#48884a', '#4c8e4c', '#316231'],
       city: { count: 70, rMin: 1750, rVar: 700, hMin: 140, hVar: 340, glow: 1.0, style: 'modern', signs: 0.30 },
-      rails: 'neon', trees: 'mixed', landmark: null, sea: null, hills: 40,
+      rails: 'neon', trees: 'mixed', landmark: null, sea: null, hills: 40, peaks: [0x4a3a68, true],
     },
   },
   {
@@ -79,7 +79,7 @@ const MAPS = [
       hemi: [0xc4d8ec, 0x4a6a3a, 1.05], sunL: [0xfff2d0, 2.5],
       ground: '#4a8a44', groundDots: ['#3f7a3d', '#549552', '#589a56', '#3a713a'],
       city: { count: 60, rMin: 1450, rVar: 500, hMin: 70, hVar: 60, glow: 0.15, style: 'paris', signs: 0 },
-      rails: 'gold', trees: 'round', landmark: 'eiffel', sea: null, hills: 28,
+      rails: 'gold', trees: 'round', landmark: 'eiffel', sea: null, hills: 28, peaks: [0x6a8a5a, true],
     },
   },
   {
@@ -96,7 +96,7 @@ const MAPS = [
       hemi: [0xcfe4f4, 0x4a7a52, 1.1], sunL: [0xfffbe8, 2.6],
       ground: '#58a04e', groundDots: ['#4c9044', '#64ac5a', '#68b05e', '#468442'],
       city: { count: 48, rMin: 1400, rVar: 420, hMin: 55, hVar: 70, glow: 0.12, style: 'riviera', signs: 0 },
-      rails: 'white', trees: 'palm', landmark: null, hills: 32,
+      rails: 'white', trees: 'palm', landmark: null, hills: 32, peaks: [0x5f9a68, false],
       sea: { x: 1024 + 500, z: 1024 + 2600, color: 0x1f8ad0 },
     },
   },
@@ -115,7 +115,7 @@ const MAPS = [
       hemi: [0x8090c0, 0x1a2a2a, 0.8], sunL: [0xbcd0ff, 1.5],
       ground: '#2c5a30', groundDots: ['#254e2a', '#336637', '#356a39', '#204724'],
       city: { count: 110, rMin: 1450, rVar: 950, hMin: 220, hVar: 460, glow: 1.25, style: 'modern', signs: 0.35 },
-      rails: 'neon', trees: 'sparse', landmark: null, sea: null, hills: 14,
+      rails: 'neon', trees: 'sparse', landmark: null, sea: null, hills: 14, peaks: [0x10162a, false],
     },
   },
   {
@@ -133,7 +133,7 @@ const MAPS = [
       hemi: [0xd0a8c0, 0x4a6a42, 1.1], sunL: [0xffc890, 2.5],
       ground: '#4f8a46', groundDots: ['#447c3e', '#5a9a52', '#5e9e56', '#3e7238'],
       city: { count: 26, rMin: 1500, rVar: 400, hMin: 45, hVar: 55, glow: 0.2, style: 'riviera', signs: 0 },
-      rails: 'coral', trees: 'palmpine', landmark: 'lighthouse', hills: 55,
+      rails: 'coral', trees: 'palmpine', landmark: 'lighthouse', hills: 55, peaks: [0x55784a, true],
       sea: { x: 1024 - 3050, z: 1024 - 300, w: 3600, h: 3600, color: 0x186098 },
     },
   },
@@ -156,7 +156,11 @@ const KEYMAP = {
   ShiftLeft: 'item', ShiftRight: 'item', KeyX: 'item',
   Enter: 'start',
 };
-addEventListener('keydown', e => { const k = KEYMAP[e.code]; if (k) { input[k] = true; e.preventDefault(); unlockAudio(); } });
+addEventListener('keydown', e => {
+  const k = KEYMAP[e.code];
+  if (k) { input[k] = true; e.preventDefault(); unlockAudio(); }
+  else if (e.code === 'KeyR') uiQueue.push({ t: 'restart' });
+});
 addEventListener('keyup', e => { const k = KEYMAP[e.code]; if (k) { input[k] = false; e.preventDefault(); } });
 
 function bindBtn(id, key) {
@@ -974,16 +978,34 @@ function makeSkyTexture(theme) {
       g.fill();
     }
   }
-  g.fillStyle = theme.mountains[0];
-  for (let x = 0; x < 1024 * K; x += 4) {
-    const h = (26 + Math.sin(x * 0.014 / K) * 14 + Math.sin(x * 0.041 / K + 2) * 8) * K;
-    g.fillRect(x, 340 * K - h, 4, h + 20 * K);
-  }
-  g.fillStyle = theme.mountains[1];
-  for (let x = 0; x < 1024 * K; x += 4) {
-    const h = (14 + Math.sin(x * 0.021 / K + 5) * 9 + Math.sin(x * 0.057 / K) * 5) * K;
-    g.fillRect(x, 348 * K - h, 4, h + 30 * K);
-  }
+  // distant ridges: irregular multi-frequency profiles fading into haze
+  const ridge = (baseY, amp, f1, f2, f3, p1, p2, color, alpha) => {
+    const grad2 = g.createLinearGradient(0, (baseY - amp - 10) * K, 0, (baseY + 26) * K);
+    grad2.addColorStop(0, color);
+    grad2.addColorStop(1, theme.sky[4]);
+    g.globalAlpha = alpha;
+    g.fillStyle = grad2;
+    g.beginPath();
+    g.moveTo(0, 512 * K);
+    for (let x = 0; x <= 1024 * K; x += 6) {
+      const u = x / K;
+      const h = amp * (0.55 * Math.sin(u * f1 + p1) + 0.3 * Math.sin(u * f2 + p2) + 0.15 * Math.sin(u * f3 + p1 * 2.7));
+      g.lineTo(x, (baseY - Math.abs(h)) * K);
+    }
+    g.lineTo(1024 * K, 512 * K);
+    g.closePath();
+    g.fill();
+    g.globalAlpha = 1;
+  };
+  ridge(344, 30, 0.011, 0.027, 0.061, 1.7, 4.2, theme.mountains[0], 0.85);
+  ridge(352, 18, 0.017, 0.041, 0.083, 3.9, 0.8, theme.mountains[1], 0.9);
+  // horizon haze veil to melt everything together
+  const haze = g.createLinearGradient(0, 300 * K, 0, 372 * K);
+  haze.addColorStop(0, 'rgba(255,255,255,0)');
+  haze.addColorStop(0.75, theme.stars > 100 ? 'rgba(140,150,190,0.20)' : 'rgba(255,255,255,0.14)');
+  haze.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = haze;
+  g.fillRect(0, 300 * K, 1024 * K, 72 * K);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
@@ -1819,6 +1841,44 @@ function buildTrack(mapIdx) {
     }
   }
 
+  // ring of real low-poly mountains: parallax + fog kill the flat backdrop
+  {
+    let mseed = 500 + mapIdx * 31;
+    const mrnd = () => (mseed = (mseed * 16807) % 2147483647) / 2147483647;
+    const [peakColor, snowy] = theme.peaks || [0x5a7a5a, false];
+    const seaAng = theme.sea ? Math.atan2(theme.sea.z - WORLDC, theme.sea.x - WORLDC) : null;
+    const rockGeos = [], snowGeos = [];
+    const COUNT = 42;
+    for (let i = 0; i < COUNT; i++) {
+      const a = (i / COUNT) * TAU + mrnd() * 0.12;
+      if (seaAng !== null && Math.abs(angDiff(a, seaAng)) < 0.55) continue;
+      const r = 2450 + mrnd() * 850;
+      const mx = WORLDC + Math.cos(a) * r;
+      const mz = WORLDC + Math.sin(a) * r;
+      const w = 320 + mrnd() * 420;
+      const h = 170 + mrnd() * 300;
+      const rock = new THREE.ConeGeometry(1, 1, 5 + Math.floor(mrnd() * 3));
+      rock.scale(w, h, w * (0.7 + mrnd() * 0.5));
+      rock.rotateY(mrnd() * TAU);
+      rock.translate(mx, h / 2 - 12, mz);
+      rockGeos.push(rock);
+      if (snowy && h > 320) {
+        const cap = new THREE.ConeGeometry(1, 1, 5);
+        cap.scale(w * 0.34, h * 0.34, w * 0.30);
+        cap.translate(mx, h - h * 0.17 - 12, mz);
+        snowGeos.push(cap);
+      }
+    }
+    if (rockGeos.length)
+      group.add(new THREE.Mesh(mergeGeometries(rockGeos), new THREE.MeshStandardMaterial({
+        color: peakColor, roughness: 1, flatShading: true,
+      })));
+    if (snowGeos.length)
+      group.add(new THREE.Mesh(mergeGeometries(snowGeos), new THREE.MeshStandardMaterial({
+        color: 0xe8eef4, roughness: 0.9, flatShading: true,
+      })));
+  }
+
   // grandstand + floodlights
   {
     const c = cl[(N - 14 + N) % N];
@@ -2638,6 +2698,13 @@ function drawHUD() {
   }
   drawCoinIcon(18, HB - 20, 1.1);
   text(`× ${player.coins}`, 30, HB - 28, 15, 'left', '#ffd24a');
+  // restart race button
+  hctx.fillStyle = 'rgba(0,0,20,0.45)';
+  hctx.strokeStyle = 'rgba(255,255,255,0.6)';
+  hctx.lineWidth = 2;
+  hctx.beginPath(); hctx.arc(HW - 24, 66, 14, 0, TAU); hctx.fill(); hctx.stroke();
+  text('↻', HW - 24, 57, 17, 'center', '#fff');
+  hitR(HW - 46, 44, 44, 44, { t: 'restart' });
   hctx.globalAlpha = 0.9;
   hctx.drawImage(track.miniCanvas, HW - 94, HB - 94);
   for (const k of karts) {
@@ -2865,6 +2932,13 @@ function frame(t) {
         resetRace(menuChar);
       }
       beep(480, 0.06, 'square');
+    } else if (a.t === 'restart') {
+      if (state === 'race' || state === 'countdown' || state === 'finish') {
+        resetRace(menuChar);
+        state = 'countdown';
+        countdownT = 0; lastBeep = -1;
+        beep(560, 0.08, 'square');
+      }
     } else if (a.t === 'cc') { ccSel = a.i; beep(480, 0.06, 'square'); }
     else if (a.t === 'char') { menuChar = a.i; beep(480, 0.06, 'square'); }
     else if (a.t === 'map') {

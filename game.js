@@ -254,13 +254,29 @@ function updateGyroBtn() {
   gyroBtn.classList.toggle('on', gyro.enabled);
 }
 gyroBtn.addEventListener('click', toggleGyro);
-try {
-  if (localStorage.getItem('iam-gyro') === '1' &&
-      !(typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function')) {
-    addEventListener('deviceorientation', onOrientation);
-    gyro.enabled = true;
-  }
-} catch (e) {}
+// gyro is ON by default (unless the player explicitly turned it off)
+let gyroPref = true;
+try { gyroPref = localStorage.getItem('iam-gyro') !== '0'; } catch (e) {}
+const needsGyroPermission = typeof DeviceOrientationEvent !== 'undefined' &&
+  typeof DeviceOrientationEvent.requestPermission === 'function';
+if (gyroPref && !needsGyroPermission && 'DeviceOrientationEvent' in window) {
+  addEventListener('deviceorientation', onOrientation);
+  gyro.enabled = true;
+}
+// iOS: permission must come from a user gesture -> ask on the first tap
+let gyroAsked = false;
+async function maybeAskGyro() {
+  if (gyroAsked || gyro.enabled || !gyroPref || !needsGyroPermission) return;
+  gyroAsked = true;
+  try {
+    const res = await DeviceOrientationEvent.requestPermission();
+    if (res === 'granted') {
+      addEventListener('deviceorientation', onOrientation);
+      gyro.enabled = true;
+      updateGyroBtn();
+    }
+  } catch (e) { /* refusé */ }
+}
 updateGyroBtn();
 
 function getPlayerSteer() {
@@ -282,6 +298,7 @@ function hitR(x, y, w, h, action) { hudRegions.push({ x, y, w, h, action }); }
 let ptrDown = null;
 glCanvas.addEventListener('pointerdown', (e) => {
   unlockAudio();
+  maybeAskGyro(); // iOS gyro permission needs a genuine tap
   ptrDown = { cx: e.clientX, cy: e.clientY };
 });
 glCanvas.addEventListener('pointerup', (e) => {
@@ -504,36 +521,114 @@ const roadNormal = noiseNormalMap(128, 24, 2.2);
 const groundNormal = noiseNormalMap(128, 16, 3.0);
 
 /* ---------------- Kart models ---------------- */
-// cartoon face painted once per character (eyes, brows, smile)
-function makeFaceTexture(skin = '#f6c9a0') {
+// cartoon faces — the first three drivers are personalised portraits of
+// Inès, Alice and Marlon (hair, glasses, expressions inspired by the family
+// photo; drawn in code, no personal data shipped)
+function makeFaceTexture(charIdx = -1) {
   const c = document.createElement('canvas');
   c.width = 256; c.height = 128;
   const g = c.getContext('2d');
+  const skin = charIdx <= 2 && charIdx >= 0 ? '#f0c8a4' : '#f6c9a0';
   g.fillStyle = skin; g.fillRect(0, 0, 256, 128);
-  // subtle shading
   const sh = g.createLinearGradient(0, 0, 0, 128);
   sh.addColorStop(0, 'rgba(255,255,255,0.10)');
   sh.addColorStop(1, 'rgba(120,70,40,0.15)');
   g.fillStyle = sh; g.fillRect(0, 0, 256, 128);
   const cx = 128, cy = 62;
+  const HAIR = ['#5d4326', '#4e3a22', '#54381e'][charIdx] || null;
+
+  // hair painted on the texture (crown + side falls)
+  if (HAIR) {
+    g.fillStyle = HAIR;
+    g.fillRect(0, 0, 256, 30); // crown
+    if (charIdx === 0) { // Inès: wavy, shoulder-length, middle part
+      g.fillRect(0, 0, 78, 128);
+      g.fillRect(178, 0, 78, 128);
+      g.beginPath(); g.moveTo(78, 30); g.quadraticCurveTo(88, 60, 78, 128); g.lineTo(60, 128); g.lineTo(60, 30); g.fill();
+      g.beginPath(); g.moveTo(178, 30); g.quadraticCurveTo(168, 60, 178, 128); g.lineTo(196, 128); g.lineTo(196, 30); g.fill();
+      g.strokeStyle = 'rgba(40,26,12,0.6)'; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(128, 0); g.lineTo(128, 26); g.stroke(); // middle part
+    } else if (charIdx === 1) { // Alice: long straight hair
+      g.fillRect(0, 0, 70, 128);
+      g.fillRect(186, 0, 70, 128);
+      g.fillRect(0, 0, 256, 36);
+    } else { // Marlon: short tousled hair
+      g.fillRect(0, 0, 62, 74);
+      g.fillRect(194, 0, 62, 74);
+      g.beginPath();
+      g.moveTo(60, 34);
+      for (let x = 60; x <= 196; x += 17)
+        g.quadraticCurveTo(x + 8, 20 + (x % 34 ? 8 : 0), x + 17, 34);
+      g.lineTo(196, 0); g.lineTo(60, 0);
+      g.closePath(); g.fill();
+    }
+  }
+
   for (const sx of [-1, 1]) {
     const ex = cx + sx * 17;
+    if (charIdx === 2) continue; // Marlon's eyes are behind sunglasses
     g.fillStyle = '#fff';
-    g.beginPath(); g.ellipse(ex, cy - 6, 11, 14, 0, 0, TAU); g.fill();
-    g.fillStyle = '#1d2c48';
+    g.beginPath(); g.ellipse(ex, cy - 6, 11, 13, 0, 0, TAU); g.fill();
+    g.fillStyle = charIdx >= 0 && charIdx <= 2 ? '#6d5a34' : '#1d2c48'; // hazel
     g.beginPath(); g.ellipse(ex + sx * 2, cy - 4, 5.5, 7.5, 0, 0, TAU); g.fill();
+    g.fillStyle = '#241a10';
+    g.beginPath(); g.ellipse(ex + sx * 2, cy - 4, 2.6, 3.6, 0, 0, TAU); g.fill();
     g.fillStyle = '#fff';
     g.beginPath(); g.ellipse(ex + sx * 4, cy - 8, 2.2, 2.6, 0, 0, TAU); g.fill();
-    // brow
-    g.strokeStyle = '#5a3a20'; g.lineWidth = 4; g.lineCap = 'round';
+    g.strokeStyle = HAIR || '#5a3a20'; g.lineWidth = 4; g.lineCap = 'round';
     g.beginPath(); g.arc(ex, cy - 22, 11, Math.PI * 1.15, Math.PI * 1.85); g.stroke();
-    // blush
     g.fillStyle = 'rgba(255,120,110,0.30)';
     g.beginPath(); g.ellipse(cx + sx * 34, cy + 12, 8, 5, 0, 0, TAU); g.fill();
   }
+
+  if (charIdx === 1) { // Alice: gold hexagonal glasses
+    g.strokeStyle = '#c8a44a'; g.lineWidth = 2.5; g.lineJoin = 'round';
+    for (const sx of [-1, 1]) {
+      const ex = cx + sx * 17;
+      g.beginPath();
+      for (let i = 0; i <= 6; i++) {
+        const a = i / 6 * TAU + Math.PI / 6;
+        const px = ex + Math.cos(a) * 15, py = cy - 6 + Math.sin(a) * 15;
+        i ? g.lineTo(px, py) : g.moveTo(px, py);
+      }
+      g.stroke();
+      g.fillStyle = 'rgba(255,220,220,0.14)';
+      g.fill();
+    }
+    g.beginPath(); g.moveTo(cx - 3, cy - 8); g.lineTo(cx + 3, cy - 8); g.stroke(); // bridge
+  }
+  if (charIdx === 2) { // Marlon: blue mirrored sunglasses
+    for (const sx of [-1, 1]) {
+      const ex = cx + sx * 17;
+      const lg = g.createLinearGradient(ex - 14, cy - 18, ex + 14, cy + 6);
+      lg.addColorStop(0, '#57e6c8');
+      lg.addColorStop(0.5, '#2e9fe6');
+      lg.addColorStop(1, '#1c5fb8');
+      g.fillStyle = lg;
+      g.beginPath(); g.ellipse(ex, cy - 6, 15, 13, 0, 0, TAU); g.fill();
+      g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 3;
+      g.stroke();
+      g.fillStyle = 'rgba(255,255,255,0.45)';
+      g.beginPath(); g.ellipse(ex - 5, cy - 11, 5, 3, -0.5, 0, TAU); g.fill();
+    }
+    g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(cx - 2, cy - 8); g.lineTo(cx + 2, cy - 8); g.stroke();
+  }
+  if (charIdx === 1 || charIdx === 2) { // light freckles
+    g.fillStyle = 'rgba(150,100,60,0.35)';
+    for (const [fx, fy] of [[-28, 16], [-22, 20], [-32, 22], [28, 16], [23, 21], [33, 22]])
+      g.fillRect(cx + fx, cy + fy, 2, 2);
+  }
   // smile
   g.strokeStyle = '#7a3a24'; g.lineWidth = 5; g.lineCap = 'round';
-  g.beginPath(); g.arc(cx, cy + 12, 13, Math.PI * 0.15, Math.PI * 0.85); g.stroke();
+  g.beginPath();
+  if (charIdx === 2) g.arc(cx, cy + 10, 14, Math.PI * 0.12, Math.PI * 0.88); // big grin
+  else g.arc(cx, cy + 12, 13, Math.PI * 0.15, Math.PI * 0.85);
+  g.stroke();
+  if (charIdx === 2) { // teeth
+    g.fillStyle = '#fff';
+    g.beginPath(); g.arc(cx, cy + 11, 11, Math.PI * 0.2, Math.PI * 0.8); g.fill();
+  }
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
@@ -763,20 +858,34 @@ function buildKartMesh(charIdx, veh = 0) {
 
   const head = new THREE.Mesh(
     new THREE.SphereGeometry(4.9, 22, 16),
-    new THREE.MeshStandardMaterial({ map: makeFaceTexture(), roughness: 0.65 })
+    new THREE.MeshStandardMaterial({ map: makeFaceTexture(charIdx), roughness: 0.65 })
   );
   head.rotation.y = Math.PI / 2;
   head.position.set(vg.seat.x, vg.seat.y + 7, 0);
   head.castShadow = true;
   chassis.add(head);
-  const capMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(ch.helmet), roughness: 0.5 });
-  const cap = new THREE.Mesh(CAP_DOME, capMat);
-  cap.position.set(vg.seat.x - 0.2, vg.seat.y + 7.8, 0);
-  chassis.add(cap);
-  const brim = new THREE.Mesh(CAP_BRIM, capMat);
-  brim.rotation.y = Math.PI / 2;
-  brim.position.set(vg.seat.x + 2.8, vg.seat.y + 9.2, 0);
-  chassis.add(brim);
+  if (charIdx <= 2) {
+    // Inès / Alice / Marlon: real hair instead of a cap
+    const hairMat = new THREE.MeshStandardMaterial({ color: [0x5d4326, 0x4e3a22, 0x54381e][charIdx], roughness: 0.85 });
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(5.2, 18, 12, 0, TAU, 0, Math.PI * 0.55), hairMat);
+    dome.position.set(vg.seat.x - 0.4, vg.seat.y + 7.1, 0);
+    chassis.add(dome);
+    if (charIdx === 0 || charIdx === 1) {
+      const back = new THREE.Mesh(new THREE.SphereGeometry(4.4, 14, 10), hairMat);
+      back.scale.set(0.85, charIdx === 1 ? 1.9 : 1.4, 1.05); // Alice's hair is longest
+      back.position.set(vg.seat.x - 2.8, vg.seat.y + 3.4, 0);
+      chassis.add(back);
+    }
+  } else {
+    const capMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(ch.helmet), roughness: 0.5 });
+    const cap = new THREE.Mesh(CAP_DOME, capMat);
+    cap.position.set(vg.seat.x - 0.2, vg.seat.y + 7.8, 0);
+    chassis.add(cap);
+    const brim = new THREE.Mesh(CAP_BRIM, capMat);
+    brim.rotation.y = Math.PI / 2;
+    brim.position.set(vg.seat.x + 2.8, vg.seat.y + 9.2, 0);
+    chassis.add(brim);
+  }
 
   if (vg.glow) {
     chassis.add(new THREE.Mesh(vg.glow, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 1.9, 2.3) })));

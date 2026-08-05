@@ -2,6 +2,11 @@
 
 Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker (`sw.js`) : chaque bump déclenche la mise à jour automatique de tous les clients installés.
 
+## v19 — Avatars Inès · Alice · Marlon + gyro par défaut
+
+- **Portraits personnalisés des trois pilotes**, inspirés de la photo de famille mais dessinés en code (aucune photo publiée — le site est public) : **Marlon** cheveux courts châtains ébouriffés + lunettes de soleil miroir bleues + grand sourire ; **Inès** cheveux mi-longs ondulés avec raie au milieu, yeux noisette ; **Alice** longs cheveux raides + **lunettes hexagonales dorées** + taches de rousseur. Vrais cheveux 3D à la place des casquettes pour les trois.
+- **Gyroscope activé par défaut** : sur Android/desktop dès le lancement ; sur iOS, la permission est demandée au premier tap (exigence Apple). Le bouton 🧭 permet toujours de le couper (choix mémorisé).
+
 ## v18 — Fix superpositions de l'écran titre
 
 - Les contrôles tactiles (joystick, boutons A/B) ne s'affichent plus que **pendant la course** — les menus sont propres.

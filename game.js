@@ -277,17 +277,35 @@ let hudRegions = [];
 const uiQueue = [];
 let tapStart = false;
 function hitR(x, y, w, h, action) { hudRegions.push({ x, y, w, h, action }); }
+// tap = validate / hit a widget; horizontal (or vertical on lists) swipe =
+// scroll through the current selection
+let ptrDown = null;
 glCanvas.addEventListener('pointerdown', (e) => {
   unlockAudio();
-  const r = glCanvas.getBoundingClientRect();
-  const x = (e.clientX - r.left) / r.width * HW;
-  const y = (e.clientY - r.top) / r.height * HB;
-  const hit = hudRegions.find(rg => x >= rg.x && x <= rg.x + rg.w && y >= rg.y && y <= rg.y + rg.h);
-  if (hit) { uiQueue.push(hit.action); return; }
-  tapStart = true; // latched so a quick tap is never missed between frames
-  input.start = true;
+  ptrDown = { cx: e.clientX, cy: e.clientY };
 });
-glCanvas.addEventListener('pointerup', () => { input.start = false; });
+glCanvas.addEventListener('pointerup', (e) => {
+  input.start = false;
+  if (!ptrDown) return;
+  const start = ptrDown; ptrDown = null;
+  const dx = e.clientX - start.cx, dy = e.clientY - start.cy;
+  const r = glCanvas.getBoundingClientRect();
+  if (Math.hypot(dx, dy) < 14) {
+    // tap
+    const x = (start.cx - r.left) / r.width * HW;
+    const y = (start.cy - r.top) / r.height * HB;
+    const hit = hudRegions.find(rg => x >= rg.x && x <= rg.x + rg.w && y >= rg.y && y <= rg.y + rg.h);
+    if (hit) { uiQueue.push(hit.action); return; }
+    tapStart = true; // latched so a quick tap is never missed between frames
+    return;
+  }
+  // swipe
+  if (Math.abs(dx) > 35 && Math.abs(dx) > Math.abs(dy))
+    uiQueue.push({ t: 'nav', d: dx < 0 ? 1 : -1 });
+  else if (Math.abs(dy) > 35)
+    uiQueue.push({ t: 'nav', d: dy < 0 ? 1 : -1 }); // vertical lists (cylindrée)
+});
+glCanvas.addEventListener('pointercancel', () => { ptrDown = null; input.start = false; });
 
 /* ---------------- Audio ---------------- */
 let AC = null, engineOsc = null, engineGain = null;
@@ -345,6 +363,12 @@ const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0x8a5a78, 900, 3300);
 const camera = new THREE.PerspectiveCamera(66, 3 / 2, 1, 6000);
 
+// iOS Safari mishandles the HDR bloom pipeline (everything turns milky and
+// overexposed) -> render directly there; the renderer applies tone mapping
+// itself and native canvas MSAA keeps the edges smooth.
+const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const USE_POST = !IS_IOS;
 const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(2, 2, {
   samples: 4, type: THREE.HalfFloatType,
 }));
@@ -3045,44 +3069,15 @@ function drawCcSelect() {
 }
 
 function drawCharSelect() {
-  // no dark overlay: the 3D kart close-up IS the star of this screen
-  stepHeader(2, 'CHOISIS TON PILOTE');
-  const ch = CHARACTERS[menuChar];
-  text('◀', HW / 2 - 120, OY + 130, 30, 'center', '#fff');
-  text('▶', HW / 2 + 120, OY + 130, 30, 'center', '#fff');
-  hitR(HW / 2 - 165, OY + 100, 90, 95, { t: 'nav', d: -1 });
-  hitR(HW / 2 + 75, OY + 100, 90, 95, { t: 'nav', d: 1 });
-  text(ch.name, HW / 2, OY + 62, 26, 'center', ch.color);
-  // vehicle picker
-  text('VÉHICULE', HW / 2, OY + 186, 10, 'center', '#9ab');
-  text('‹', HW / 2 - 95, OY + 196, 22, 'center', '#fff');
-  text('›', HW / 2 + 95, OY + 196, 22, 'center', '#fff');
-  text(VEHICLES[vehSel], HW / 2, OY + 200, 16, 'center', '#ffd24a');
-  hitR(HW / 2 - 130, OY + 188, 70, 34, { t: 'veh', d: -1 });
-  hitR(HW / 2 + 60, OY + 188, 70, 34, { t: 'veh', d: 1 });
-  // MK-style character grid
-  const tile = 34, gap = 8;
-  const total = CHARACTERS.length * tile + (CHARACTERS.length - 1) * gap;
-  const x0 = HW / 2 - total / 2;
-  CHARACTERS.forEach((c, i) => {
-    const x = x0 + i * (tile + gap);
-    const y = OY + 224;
-    const sel = i === menuChar;
-    hitR(x - 4, y - 6, tile + 8, tile + 22, { t: 'char', i });
-    hctx.fillStyle = c.color;
-    hctx.globalAlpha = sel ? 1 : 0.55;
-    hctx.beginPath(); hctx.roundRect(x, y, tile, tile, 8); hctx.fill();
-    hctx.globalAlpha = 1;
-    if (sel) {
-      hctx.strokeStyle = '#fff';
-      hctx.lineWidth = 3;
-      hctx.beginPath(); hctx.roundRect(x - 2, y - 2, tile + 4, tile + 4, 9); hctx.stroke();
-    }
-    // helmet dot
-    hctx.fillStyle = c.helmet;
-    hctx.beginPath(); hctx.arc(x + tile / 2, y + 12, 7, 0, TAU); hctx.fill();
-    text(c.name.slice(0, 3), x + tile / 2, y + tile + 4, 8, 'center', sel ? '#fff' : '#9ab');
-  });
+  // no dark overlay: the 3D vehicle close-up IS the star of this screen
+  stepHeader(2, 'CHOISIS TON VÉHICULE');
+  text('◀', HW / 2 - 130, OY + 130, 34, 'center', '#fff');
+  text('▶', HW / 2 + 130, OY + 130, 34, 'center', '#fff');
+  hitR(HW / 2 - 180, OY + 90, 100, 110, { t: 'nav', d: -1 });
+  hitR(HW / 2 + 80, OY + 90, 100, 110, { t: 'nav', d: 1 });
+  text(VEHICLES[vehSel], HW / 2, OY + 62, 28, 'center', '#ffd24a');
+  text(`${vehSel + 1} / ${VEHICLES.length}`, HW / 2, OY + 96, 11, 'center', '#9ab');
+  text('← glisse pour changer →', HW / 2, OY + 232, 11, 'center', '#8ac');
   drawGoButton('CONTINUER ▶');
 }
 
@@ -3210,7 +3205,7 @@ function frame(t) {
       beep(360, 0.08, 'square');
     } else if (a.t === 'nav') {
       const dir = a.d;
-      if (state === 'char') menuChar = (menuChar + CHARACTERS.length + dir) % CHARACTERS.length;
+      if (state === 'char') { uiQueue.push({ t: 'veh', d: dir }); continue; }
       else if (state === 'cc') ccSel = (ccSel + CC_CLASSES.length + dir) % CC_CLASSES.length;
       else if (state === 'map') {
         mapSel = (mapSel + MAPS.length + dir) % MAPS.length;
@@ -3246,21 +3241,11 @@ function frame(t) {
   const leftPressed = effLeft && !prevLeft;
   const rightPressed = effRight && !prevRight;
   const itemPressed = input.item && !prevItem;
-  const gasNow = input.gas;
   prevStart = input.start; prevLeft = effLeft; prevRight = effRight; prevItem = input.item;
-  const wasGas = prevGas; prevGas = gasNow;
 
   if (window.__iamUpdateReady && state !== 'race' && state !== 'countdown') {
     window.__iamUpdateReady = false;
     location.reload();
-    return;
-  }
-
-  // landscape only on mobile: in portrait the rotate overlay covers the
-  // screen (CSS) and the whole game pauses — no unfair AI progress, and no
-  // fight with the gyroscope when iOS flips the orientation
-  if (innerHeight > innerWidth && matchMedia('(pointer: coarse)').matches) {
-    updateEngine(0, false);
     return;
   }
 
@@ -3276,11 +3261,10 @@ function frame(t) {
     if (itemPressed) { state = 'title'; beep(360, 0.08, 'square'); }
     else if (startPressed) { ccMul = CC_CLASSES[ccSel].mul; state = 'char'; beep(560, 0.08, 'square'); }
   } else if (state === 'char') {
-    // étape 2/3 : pilote + véhicule (gros plan MK)
-    if (leftPressed) menuChar = (menuChar + CHARACTERS.length - 1) % CHARACTERS.length;
-    if (rightPressed) menuChar = (menuChar + 1) % CHARACTERS.length;
-    if (gasNow && !wasGas) uiQueue.push({ t: 'veh', d: 1 });
-    if (karts.length === 0 || karts[0].charIdx !== menuChar) { resetRace(menuChar); beep(480, 0.06, 'square'); }
+    // étape 2/3 : choix du véhicule (gros plan MK) — un seul paramètre
+    if (leftPressed) uiQueue.push({ t: 'veh', d: -1 });
+    if (rightPressed) uiQueue.push({ t: 'veh', d: 1 });
+    if (karts.length === 0) resetRace(menuChar);
     if (itemPressed) { state = 'cc'; beep(360, 0.08, 'square'); }
     else if (startPressed) { state = 'map'; beep(560, 0.08, 'square'); }
   } else if (state === 'map') {
@@ -3338,7 +3322,7 @@ function frame(t) {
   syncKartMeshes(dt);
   updateWorldFX(dt, tSec);
   updateCamera(dt);
-  composer.render();
+  if (USE_POST) composer.render(); else renderer.render(scene, camera);
 
   const S = Math.min(hud.width / 480, hud.height / HH);
   HW = Math.round(hud.width / S);

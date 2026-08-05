@@ -2,6 +2,40 @@
 
 Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker (`sw.js`) : chaque bump déclenche la mise à jour automatique de tous les clients installés.
 
+## v23 — Chat vocal, choix du pilote, menus pleine hauteur
+
+- **Nouvelle étape 4/5 « Choisis ton pilote »** (solo **et** duo) : chacun choisit qui conduit — Inès, Alice, Marlon (avec leurs vrais visages) ou un rival. En duo, chacun voit le pilote de l'autre ; si les deux prennent le même, l'invité est décalé automatiquement sur le siège libre au départ.
+- **Joueur 2 visible sur la minimap** : gros point doré cerclé marqué « 2 », et sous la carte un indicateur **« ▲ J2 devant / ▼ J2 derrière »** en direct.
+- **Menus pleine hauteur en portrait** : les 10 écrans (titre, cylindrée, véhicule, couleur, pilote, circuit + 4 écrans duo) étirent leur contenu sur tout l'écran au lieu de se tasser au centre.
+
+### Chat vocal entre les deux joueurs
+
+- **Bouton 🎙 en haut à droite dès que les deux téléphones sont connectés** : un tap → le micro s'active (autorisation demandée la première fois) et la voix part **directement** vers l'autre téléphone par le même tunnel pair-à-pair WebRTC que le jeu — aucun serveur, aucune inscription.
+- Chacun contrôle son propre micro (🎙 OFF par défaut, bouton rouge quand il émet) ; l'autre entend dans le haut-parleur. Écho et bruit filtrés (echoCancellation + noiseSuppression).
+- Astuce iOS : si le son de l'autre n'arrive pas tout de suite, un simple tap n'importe où le débloque (règle Apple sur la lecture audio).
+- Le micro se coupe proprement à la fin de la partie ou si la connexion tombe.
+- Testé de bout en bout : deux navigateurs à micros simulés, flux vocal reçu dans les deux sens, on/off propre — 7/7.
+
+## v24 — Header lisible, quitter, carapace rouge, scoreboard 100 % réel
+
+- **Header de course sous la barre iOS** (sonde `env(safe-area-inset-top)`) : position, tour, chrono et objet enfin lisibles.
+- **Slot d'objet tappable** (+ rappel « tape ici ! » clignotant, halo doré) — le bouton B marche toujours.
+- **Bouton 🏠 quitter** sous ↻ : retour au menu en un tap, réseau coupé proprement.
+- **Carapace rouge à tête chercheuse** : vise le kart juste devant, plus rapide, voyage en réseau avec sa cible.
+- **« ⚠ DEMI-TOUR ! »** : alerte clignotante quand on roule à contresens.
+- **Nouveau moteur sonore** : deux couches (growl + basse), filtre qui suit la vitesse, léger tremolo — plus « jeu vidéo », moins raspy. Sons de choc entre karts, jingle dernier tour.
+- **Prénom mémorisé** : si on te connaît déjà, le record est enregistré sans rien demander ; la question n'apparaît qu'au premier record.
+- **Multijoueur : uniquement les vrais joueurs** dans tous les classements — position en haut à gauche, mini-classement sous la minimap et écran d'arrivée comptent entre humains (les IA roulent mais ne comptent pas) ; plus de « Record local » hors-sujet en ligne.
+- **Bouton ‹ RETOUR visible** (vraie puce cliquable) sur tous les écrans + **pavé numérique géant** pour taper le code de partie.
+- Audit scoreboard automatisé : temps par tour additionnés = temps final = record stocké (aucune donnée inventée).
+
+## v22 — Conduite précise, kart à plat sur la piste
+
+- **Les 4 roues toujours au sol** : l'orientation du kart est désormais calculée à partir de la **vraie normale de la surface** (devers + pente combinés, projetés sur le cap réel du kart). Fini la voiture penchée n'importe comment dans les virages relevés ou lors des bousculades — elle épouse la route quelle que soit sa direction.
+- **Direction plus précise** : zone morte + courbe progressive sur le joystick et le gyroscope (petits mouvements de pouce = micro-corrections, extrémités = braquage complet).
+- **Stable à haute vitesse** : le braquage est automatiquement adouci de ~30 % à pleine vitesse — plus de zigzag nerveux en ligne droite.
+- **Moins d'effet « crabe »** : la caméra suit le cap ~60 % plus vite, la voiture reste visuellement dans l'axe quand on tourne ; réponse visuelle du braquage accélérée.
+
 ## v21 — Multijoueur : deux enfants, deux téléphones, un code
 
 - **Mode « À DEUX EN LIGNE » sur l'écran titre** : pair-à-pair WebRTC (PeerJS vendoré, annuaire cloud gratuit uniquement pour se trouver — le jeu circule ensuite en direct entre les deux téléphones, Wi-Fi ou 4G).

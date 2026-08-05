@@ -6,7 +6,7 @@
 // clients pick up new releases automatically within minutes.
 // Bump CACHE_VERSION on every release to force an immediate coordinated update.
 
-const CACHE_VERSION = 'iam-kart-v20';
+const CACHE_VERSION = 'iam-kart-v21';
 
 // Pages served by these very old caches predate the in-page auto-reload
 // logic — the only way to unstick them is a forced navigation on activate.
@@ -18,6 +18,7 @@ const ASSETS = [
   './style.css',
   './game.js',
   './vendor/three.module.js',
+  './vendor/peerjs.min.js',
   './vendor/three.core.min.js',
   './vendor/addons/postprocessing/EffectComposer.js',
   './vendor/addons/postprocessing/RenderPass.js',

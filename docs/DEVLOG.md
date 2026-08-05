@@ -16,6 +16,19 @@ Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker
 - Le micro se coupe proprement à la fin de la partie ou si la connexion tombe.
 - Testé de bout en bout : deux navigateurs à micros simulés, flux vocal reçu dans les deux sens, on/off propre — 7/7.
 
+## v24 — Header lisible, quitter, carapace rouge, scoreboard 100 % réel
+
+- **Header de course sous la barre iOS** (sonde `env(safe-area-inset-top)`) : position, tour, chrono et objet enfin lisibles.
+- **Slot d'objet tappable** (+ rappel « tape ici ! » clignotant, halo doré) — le bouton B marche toujours.
+- **Bouton 🏠 quitter** sous ↻ : retour au menu en un tap, réseau coupé proprement.
+- **Carapace rouge à tête chercheuse** : vise le kart juste devant, plus rapide, voyage en réseau avec sa cible.
+- **« ⚠ DEMI-TOUR ! »** : alerte clignotante quand on roule à contresens.
+- **Nouveau moteur sonore** : deux couches (growl + basse), filtre qui suit la vitesse, léger tremolo — plus « jeu vidéo », moins raspy. Sons de choc entre karts, jingle dernier tour.
+- **Prénom mémorisé** : si on te connaît déjà, le record est enregistré sans rien demander ; la question n'apparaît qu'au premier record.
+- **Multijoueur : uniquement les vrais joueurs** dans tous les classements — position en haut à gauche, mini-classement sous la minimap et écran d'arrivée comptent entre humains (les IA roulent mais ne comptent pas) ; plus de « Record local » hors-sujet en ligne.
+- **Bouton ‹ RETOUR visible** (vraie puce cliquable) sur tous les écrans + **pavé numérique géant** pour taper le code de partie.
+- Audit scoreboard automatisé : temps par tour additionnés = temps final = record stocké (aucune donnée inventée).
+
 ## v22 — Conduite précise, kart à plat sur la piste
 
 - **Les 4 roues toujours au sol** : l'orientation du kart est désormais calculée à partir de la **vraie normale de la surface** (devers + pente combinés, projetés sur le cap réel du kart). Fini la voiture penchée n'importe comment dans les virages relevés ou lors des bousculades — elle épouse la route quelle que soit sa direction.

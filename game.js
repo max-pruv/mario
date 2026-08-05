@@ -360,17 +360,27 @@ if (audioBtn) audioBtn.addEventListener('click', () => {
   if (!muted) beep(660, 0.1, 'square', 990);
 });
 updateAudioBtn();
+let engineOsc2 = null, engineFilter = null;
 function unlockAudio() {
   if (AC) { if (AC.state === 'suspended') AC.resume(); return; }
   try {
     AC = new (window.AudioContext || window.webkitAudioContext)();
+    // playful two-layer engine: saw growl + sub square, warm lowpass, light wobble
     engineOsc = AC.createOscillator();
     engineOsc.type = 'sawtooth';
-    const filter = AC.createBiquadFilter();
-    filter.type = 'lowpass'; filter.frequency.value = 420;
+    engineOsc2 = AC.createOscillator();
+    engineOsc2.type = 'square';
+    const subGain = AC.createGain(); subGain.gain.value = 0.55;
+    engineFilter = AC.createBiquadFilter();
+    engineFilter.type = 'lowpass'; engineFilter.frequency.value = 380; engineFilter.Q.value = 1.2;
     engineGain = AC.createGain(); engineGain.gain.value = 0;
-    engineOsc.connect(filter).connect(engineGain).connect(AC.destination);
-    engineOsc.start();
+    const lfo = AC.createOscillator(); lfo.frequency.value = 7;
+    const lfoDepth = AC.createGain(); lfoDepth.gain.value = 5; // cents of burble
+    lfo.connect(lfoDepth).connect(engineOsc.detune);
+    engineOsc.connect(engineFilter);
+    engineOsc2.connect(subGain).connect(engineFilter);
+    engineFilter.connect(engineGain).connect(AC.destination);
+    engineOsc.start(); engineOsc2.start(); lfo.start();
   } catch (e) { AC = null; }
 }
 function beep(freq, dur = 0.1, type = 'square', slideTo = 0, vol = 0.12) {
@@ -386,8 +396,11 @@ function beep(freq, dur = 0.1, type = 'square', slideTo = 0, vol = 0.12) {
 }
 function updateEngine(speed, racing) {
   if (!AC || !engineGain) return;
-  engineGain.gain.setTargetAtTime((racing && !muted) ? 0.04 : 0, AC.currentTime, 0.1);
-  engineOsc.frequency.setTargetAtTime(55 + speed * 0.55, AC.currentTime, 0.05);
+  engineGain.gain.setTargetAtTime((racing && !muted) ? 0.05 : 0, AC.currentTime, 0.1);
+  const f = 58 + speed * 0.62;
+  engineOsc.frequency.setTargetAtTime(f, AC.currentTime, 0.05);
+  if (engineOsc2) engineOsc2.frequency.setTargetAtTime(f / 2, AC.currentTime, 0.05);
+  if (engineFilter) engineFilter.frequency.setTargetAtTime(340 + speed * 5.2, AC.currentTime, 0.08);
 }
 
 /* ---------------- Renderer ---------------- */
@@ -2680,7 +2693,7 @@ function makeKart(charIdx, isPlayer, gridPos) {
     lapTimes: [], lapStart: 0,
     aiSkill: 0.87 + (gridPos % 7) * 0.017,
     laneSeed: gridPos * 1.7,
-    steerVis: 0, wheelSpin: 0,
+    steerVis: 0, wheelSpin: 0, wrongWayT: 0,
     netDriven: false, isRemotePlayer: false, netT: null,
   };
 }
@@ -3331,6 +3344,13 @@ function updateKart(k, dt) {
   k.key = k.lap * N + ni;
   if (k.lap > LAPS && !k.finishTime) k.finishTime = raceTime;
 
+  if (k.isPlayer) {
+    // driving against the track direction?
+    const dd = Math.cos(k.angle) * center[ni].dirx + Math.sin(k.angle) * center[ni].diry;
+    if (state === 'race' && dd < -0.25 && k.speed > 30) k.wrongWayT += dt;
+    else k.wrongWayT = 0;
+  }
+
   const cc = center[ni];
   const dc = Math.hypot(cc.x - k.x, cc.y - k.y);
   // Lakitu-style rescue: 3s off the road (1.4s when really lost) puts the
@@ -3824,12 +3844,21 @@ function computeHudTop() {
   hudTop = Math.round((Math.max(10, safe) + 46) * (HW / cssW)) + 2;
 }
 
+function humanRank() {
+  const hs = karts.filter((k) => k.isPlayer || k.isRemotePlayer).sort((a, b) => b.key - a.key);
+  return { list: hs, mine: hs.findIndex((k) => k.isPlayer) + 1 };
+}
+
 function drawHUD() {
   computeHudTop();
   if (net.lostT > 0 && Math.sin(perfNow * 0.015) > 0)
     text('⚠ Connexion perdue — reconnexion…', HW / 2, OY + 30, 13, 'center', '#ff7c6a');
   else if (net.aiGoneT > 0)
     text("Joueur 2 déconnecté — l'IA prend le volant", HW / 2, OY + 30, 12, 'center', '#ffd24a');
+  if (player.wrongWayT > 0.6 && state === 'race' && Math.sin(perfNow * 0.014) > -0.4) {
+    text('⚠ DEMI-TOUR !', HW / 2, OY + HH / 2 - 60, 30, 'center', '#ff5548');
+    text('Tu roules à l’envers', HW / 2, OY + HH / 2 - 24, 14, 'center', '#ffd24a');
+  }
   if (player.offroadT > 1.2 && state === 'race') {
     // rescue incoming — pulse a warning so the teleport isn't a surprise
     const blink = Math.sin(perfNow * 0.012) > -0.3;
@@ -3851,7 +3880,8 @@ function drawHUD() {
     }
     hctx.restore();
   }
-  text(PLACE_TXT[player.place - 1], 10, hudTop, 26, 'left', PLACE_COL[player.place - 1]);
+  const dispPlace = net.active ? humanRank().mine : player.place;
+  text(PLACE_TXT[dispPlace - 1], 10, hudTop, 26, 'left', PLACE_COL[dispPlace - 1]);
   text(CC_CLASSES[ccSel].label, 12, hudTop + 30, 11, 'left', '#9fe');
   text(`LAP ${clamp(player.lap, 1, LAPS)}/${LAPS}`, HW - 10, hudTop, 16, 'right');
   text(fmtTime(raceTime), HW - 10, hudTop + 20, 12, 'right', '#cfe');
@@ -3899,13 +3929,13 @@ function drawHUD() {
   }
   if (net.active) {
     // compact live standings of the humans in the race
-    const humans = [...karts].filter((k) => k.isPlayer || k.isRemotePlayer).sort((x, y) => x.place - y.place);
+    const humans = humanRank().list;
     let ly = HB > HW ? mmY + 96 : mmY - 14 - humans.length * 12;
-    for (const k of humans) {
-      const label = `${k.place}ᵉ ${k.isPlayer ? 'Toi' : CHARACTERS[k.charIdx].name}`;
+    humans.forEach((k, hi) => {
+      const label = `${hi + 1}ᵉ ${k.isPlayer ? 'Toi' : CHARACTERS[k.charIdx].name}`;
       text(label, HW - 52, ly, 10, 'center', k.isPlayer ? '#fff' : '#ffd24a');
       ly += 12;
-    }
+    });
     const rk = netRemoteKart();
     if (rk) {
       const ahead = rk.key > player.key;
@@ -3954,11 +3984,19 @@ function MY(y) {
   return top + (y / HH) * Math.max(HH, bottom - top);
 }
 
+function drawBackBtn() {
+  const w = 100, h = 38, x = 10, y = MY(34);
+  hctx.fillStyle = 'rgba(20,20,55,0.85)';
+  hctx.strokeStyle = 'rgba(255,255,255,0.8)'; hctx.lineWidth = 2;
+  hctx.beginPath(); hctx.roundRect(x, y, w, h, 14); hctx.fill(); hctx.stroke();
+  text('‹ RETOUR', x + w / 2, y + 11, 13, 'center', '#fff');
+  hitR(x - 8, y - 10, w + 24, h + 24, { t: 'back' });
+}
+
 function stepHeader(step, label) {
   text(`ÉTAPE ${step}/5`, HW / 2, MY(14), 11, 'center', '#ff50dc');
   text(label, HW / 2, MY(28), 22, 'center', '#40e0ff');
-  text('‹ retour', 14, MY(46), 13, 'left', '#cde');
-  hitR(0, MY(36), 96, 36, { t: 'back' });
+  drawBackBtn();
 }
 
 function drawTitle() {
@@ -3996,8 +4034,7 @@ function drawMpMenu() {
   mpButton(MY(84), 'CRÉER UNE PARTIE', { t: 'mp-create' });
   mpButton(MY(142), 'REJOINDRE AVEC UN CODE', { t: 'mp-goto-join' });
   if (net.error) text('⚠ ' + net.error, HW / 2, MY(202), 12, 'center', '#ff7c6a');
-  text('‹ retour', 14, MY(46), 13, 'left', '#cde');
-  hitR(0, MY(36), 96, 36, { t: 'back' });
+  drawBackBtn();
 }
 
 function drawMpHost() {
@@ -4009,36 +4046,35 @@ function drawMpHost() {
   const dots = '.'.repeat(1 + ((perfNow / 400) | 0) % 3);
   text((net.status || 'En attente du joueur 2') + dots, HW / 2, MY(178), 13, 'center', '#9fe');
   if (net.error) text('⚠ ' + net.error, HW / 2, MY(210), 12, 'center', '#ff7c6a');
-  text('‹ retour', 14, MY(46), 13, 'left', '#cde');
-  hitR(0, MY(36), 96, 36, { t: 'back' });
+  drawBackBtn();
 }
 
 function drawMpJoin() {
   hctx.fillStyle = 'rgba(8,5,25,0.6)';
   hctx.fillRect(0, 0, HW, HB);
   text('TAPE LE CODE', HW / 2, MY(10), 20, 'center', '#40e0ff');
-  for (let i = 0; i < 4; i++) { // 4 code slots
-    const x = HW / 2 - 82 + i * 44, y = MY(38);
-    hctx.strokeStyle = i === net.joinCode.length ? '#ffd24a' : 'rgba(255,255,255,0.5)';
-    hctx.lineWidth = 2;
-    hctx.beginPath(); hctx.roundRect(x, y, 36, 40, 8); hctx.stroke();
-    if (net.joinCode[i]) text(net.joinCode[i], x + 18, y + 8, 24, 'center', '#fff');
+  for (let i = 0; i < 4; i++) { // 4 big code slots
+    const x = HW / 2 - 112 + i * 58, y = MY(36);
+    hctx.strokeStyle = i === net.joinCode.length ? '#ffd24a' : 'rgba(255,255,255,0.55)';
+    hctx.lineWidth = 2.5;
+    hctx.beginPath(); hctx.roundRect(x, y, 50, 52, 10); hctx.stroke();
+    if (net.joinCode[i]) text(net.joinCode[i], x + 25, y + 10, 30, 'center', '#fff');
   }
   const rows = [[1, 2, 3], [4, 5, 6], [7, 8, 9], ['⌫', 0, null]];
   rows.forEach((row, r) => {
     row.forEach((d, ci) => {
       if (d === null) return;
-      const x = HW / 2 - 74 + ci * 52, y = MY(92 + r * 40);
-      hctx.fillStyle = 'rgba(30,60,140,0.7)';
-      hctx.beginPath(); hctx.roundRect(x, y, 44, 32, 10); hctx.fill();
-      text(String(d), x + 22, y + 7, 17, 'center', '#fff');
-      hitR(x - 3, y - 3, 50, 38, d === '⌫' ? { t: 'digit-del' } : { t: 'digit', d });
+      const x = HW / 2 - 128 + ci * 88, y = MY(100 + r * 52);
+      hctx.fillStyle = 'rgba(30,60,140,0.75)';
+      hctx.strokeStyle = 'rgba(120,190,255,0.5)'; hctx.lineWidth = 1.5;
+      hctx.beginPath(); hctx.roundRect(x, y, 80, 44, 12); hctx.fill(); hctx.stroke();
+      text(String(d), x + 40, y + 10, 23, 'center', '#fff');
+      hitR(x - 4, y - 4, 88, 52, d === '⌫' ? { t: 'digit-del' } : { t: 'digit', d });
     });
   });
   if (net.status) text(net.status + '.'.repeat(1 + ((perfNow / 400) | 0) % 3), HW / 2, HB - 40, 13, 'center', '#9fe');
   if (net.error) text('⚠ ' + net.error, HW / 2, HB - 24, 12, 'center', '#ff7c6a');
-  text('‹ retour', 14, MY(46), 13, 'left', '#cde');
-  hitR(0, MY(36), 96, 36, { t: 'back' });
+  drawBackBtn();
 }
 
 function drawMpWait() {
@@ -4048,8 +4084,7 @@ function drawMpWait() {
   text('PRÊT !', HW / 2, MY(60), 26, 'center', '#6ede3a');
   text("L'hôte choisit le circuit" + dots, HW / 2, MY(110), 16, 'center', '#fff');
   text('La course démarre toute seule, tiens-toi prêt 🏁', HW / 2, MY(146), 12, 'center', '#9ab');
-  text('‹ retour', 14, MY(46), 13, 'left', '#cde');
-  hitR(0, MY(36), 96, 36, { t: 'back' });
+  drawBackBtn();
 }
 
 function drawCcSelect() {
@@ -4195,7 +4230,7 @@ function drawFinish() {
   const rows = net.active ? sorted.filter((k) => k.isPlayer || k.isRemotePlayer) : sorted;
   rows.forEach((k, i) => {
     const ch = CHARACTERS[k.charIdx];
-    const place = sorted.indexOf(k);
+    const place = net.active ? i : sorted.indexOf(k); // online: rank among real players only
     const big = net.active;
     const y = OY + (big ? 70 : 58) + i * (big ? 34 : 22);
     text(PLACE_TXT[place], HW / 2 - 130, y, big ? 20 : 14, 'left', PLACE_COL[place]);
@@ -4458,7 +4493,13 @@ function frame(t) {
   if (state === 'finish') {
     if (finishDelay > 0) finishDelay -= dt;
     else {
-      if (pendingRecord && !nameAsked) { nameAsked = true; showNameOverlay(); }
+      if (pendingRecord && !nameAsked) {
+        nameAsked = true;
+        let known = '';
+        try { known = (localStorage.getItem('iam-lastname') || '').trim(); } catch (e) {}
+        if (known) commitRecord(known); // we know who's playing — no prompt
+        else showNameOverlay();
+      }
       if (startPressed && !pendingRecord) {
         if (net.active) duoRematch();
         else { state = 'cc'; resetRace(menuChar); }

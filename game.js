@@ -4450,8 +4450,23 @@ function MY(y) {
   return top + (y / 250) * Math.max(240, bottom - top);
 }
 
+function headerVeil() {
+  const grad = hctx.createLinearGradient(0, MY(0) - 14, 0, MY(64));
+  grad.addColorStop(0, 'rgba(6,6,22,0.55)');
+  grad.addColorStop(1, 'rgba(6,6,22,0)');
+  hctx.fillStyle = grad;
+  hctx.fillRect(0, MY(0) - 14, HW, MY(64) - MY(0) + 14);
+}
+
+function namePlate(y, w, h) {
+  hctx.fillStyle = 'rgba(8,10,28,0.55)';
+  hctx.strokeStyle = 'rgba(120,190,255,0.35)';
+  hctx.lineWidth = 1.5;
+  hctx.beginPath(); hctx.roundRect(HW / 2 - w / 2, y, w, h, 14); hctx.fill(); hctx.stroke();
+}
+
 function drawBackBtn() {
-  const w = 100, h = 38, x = 10, y = MY(34);
+  const w = 100, h = 38, x = 10, y = MY(8);
   hctx.fillStyle = 'rgba(20,20,55,0.85)';
   hctx.strokeStyle = 'rgba(255,255,255,0.8)'; hctx.lineWidth = 2;
   hctx.beginPath(); hctx.roundRect(x, y, w, h, 14); hctx.fill(); hctx.stroke();
@@ -4460,8 +4475,9 @@ function drawBackBtn() {
 }
 
 function stepHeader(step, label) {
-  text(`ÉTAPE ${step}/5`, HW / 2, MY(14), 11, 'center', '#ff50dc');
-  text(label, HW / 2, MY(28), 22, 'center', '#40e0ff');
+  headerVeil();
+  text(`ÉTAPE ${step}/5`, HW / 2, MY(10), 11, 'center', '#ff50dc');
+  text(label, HW / 2, MY(24), 22, 'center', '#40e0ff');
   drawBackBtn();
 }
 
@@ -4572,15 +4588,13 @@ function drawCcSelect() {
   CC_CLASSES.forEach((cc, i) => {
     const sel = i === ccSel;
     const y = MY(84 + i * 52);
-    hitR(HW / 2 - 150, y - 10, 300, 48, { t: 'cc', i });
-    if (sel) {
-      hctx.fillStyle = 'rgba(64,224,255,0.18)';
-      hctx.strokeStyle = '#40e0ff';
-      hctx.lineWidth = 2;
-      hctx.beginPath(); hctx.roundRect(HW / 2 - 140, y - 8, 280, 44, 10); hctx.fill(); hctx.stroke();
-    }
-    text(cc.label, HW / 2 - 70, y, 24, 'left', sel ? '#ffd24a' : '#eee');
-    text(cc.desc, HW / 2 + 70, y + 7, 14, 'right', sel ? '#fff' : '#9ab');
+    hitR(HW / 2 - 160, y - 14, 320, 56, { t: 'cc', i });
+    hctx.fillStyle = sel ? 'rgba(64,224,255,0.20)' : 'rgba(8,10,28,0.55)';
+    hctx.strokeStyle = sel ? '#40e0ff' : 'rgba(255,255,255,0.28)';
+    hctx.lineWidth = sel ? 2.5 : 1.5;
+    hctx.beginPath(); hctx.roundRect(HW / 2 - 150, y - 10, 300, 48, 12); hctx.fill(); hctx.stroke();
+    text(cc.label, HW / 2 - 130, y, 24, 'left', sel ? '#ffd24a' : '#eee');
+    text(cc.desc, HW / 2 + 130, y + 7, 14, 'right', sel ? '#fff' : '#9ab');
   });
   drawGoButton('CONTINUER ▶');
 }
@@ -4592,6 +4606,7 @@ function drawCharSelect() {
   text('▶', HW / 2 + 130, MY(130), 34, 'center', '#fff');
   hitR(HW / 2 - 180, MY(90), 100, 110, { t: 'nav', d: -1 });
   hitR(HW / 2 + 80, MY(90), 100, 110, { t: 'nav', d: 1 });
+  namePlate(MY(56), 250, 44);
   text(VEHICLES[vehSel], HW / 2, MY(62), 28, 'center', '#ffd24a');
   text(`${vehSel + 1} / ${VEHICLES.length}`, HW / 2, MY(96), 11, 'center', '#9ab');
   text('← glisse pour changer →', HW / 2, MY(232), 11, 'center', '#8ac');
@@ -4627,6 +4642,7 @@ function drawColorSelect() {
 function drawPilotSelect() {
   stepHeader(4, 'CHOISIS TON PILOTE');
   const ch = CHARACTERS[menuChar];
+  namePlate(MY(56), 250, 44);
   text(ch.name.toUpperCase(), HW / 2, MY(62), 28, 'center', '#ffd24a');
   if (menuChar <= 2) text('⭐ un vrai pilote IAM !', HW / 2, MY(96), 12, 'center', '#ff50dc');
   else text('un rival', HW / 2, MY(96), 12, 'center', '#9ab');
@@ -4654,6 +4670,7 @@ function drawMapSelect() {
   text('▶', HW / 2 + 150, MY(110), 30, 'center', '#fff');
   hitR(HW / 2 - 195, MY(80), 90, 100, { t: 'nav', d: -1 });
   hitR(HW / 2 + 105, MY(80), 90, 100, { t: 'nav', d: 1 });
+  namePlate(MY(52), 270, 44);
   text(map.name.toUpperCase(), HW / 2, MY(58), 28, 'center', '#ffd24a');
   text(map.desc, HW / 2, MY(92), 12, 'center', '#cfe');
   hctx.globalAlpha = 0.95;

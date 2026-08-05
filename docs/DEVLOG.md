@@ -2,6 +2,11 @@
 
 Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker (`sw.js`) : chaque bump déclenche la mise à jour automatique de tous les clients installés.
 
+## v16 — Autocomplétion des prénoms (anti-doublons)
+
+- En tapant les premières lettres dans la fenêtre de fin de course, les prénoms déjà connus (joueurs récents + tous les noms du leaderboard) s'affichent en suggestions tappables, filtrées en direct — insensible à la casse **et aux accents** (« ines » retrouve « Inès »).
+- À la sauvegarde, un prénom identique à un existant (casse/accents différents) est **fusionné** avec la graphie d'origine : plus de doublons Marlon/marlon dans le classement.
+
 ## v15 — Garage de véhicules, boutons CONTINUER, leaderboard nominatif
 
 - **6 véhicules aux formes réellement différentes** : Kart classique, **Formule** (F1 à roues apparentes, ailerons), **Pod Racer** façon Star Wars (double nacelle + cockpit, en lévitation avec propulseurs lumineux), **Speeder** volant (moto anti-grav à fourches), **Brique** style Lego (carrosserie cubique à tenons chromés), **Fusée** (corps de rocket à hublots et tuyère). Sélecteur « VÉHICULE ‹ › » à l'étape pilote, mémorisé ; chaque IA roule dans son propre type de véhicule.

@@ -16,6 +16,11 @@ Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker
 - Le micro se coupe proprement à la fin de la partie ou si la connexion tombe.
 - Testé de bout en bout : deux navigateurs à micros simulés, flux vocal reçu dans les deux sens, on/off propre — 7/7.
 
+## v25 — Menus : plus d'overlap, vraie pleine hauteur
+
+- Les titres des menus démarrent désormais **sous** la rangée de boutons (GYRO/son/AUTO) grâce à la même sonde safe-area que le HUD de course — fini « CHOISIS TON VÉHICULE » caché derrière les boutons.
+- La mise en page des menus s'étale sur **toute** la hauteur restante (plus de gros vide au-dessus de CONTINUER).
+
 ## v24 — Header lisible, quitter, carapace rouge, scoreboard 100 % réel
 
 - **Header de course sous la barre iOS** (sonde `env(safe-area-inset-top)`) : position, tour, chrono et objet enfin lisibles.

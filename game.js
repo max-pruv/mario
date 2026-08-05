@@ -3872,7 +3872,6 @@ function humanRank() {
 }
 
 function drawHUD() {
-  computeHudTop();
   if (net.lostT > 0 && Math.sin(perfNow * 0.015) > 0)
     text('⚠ Connexion perdue — reconnexion…', HW / 2, OY + 30, 13, 'center', '#ff7c6a');
   else if (net.aiGoneT > 0)
@@ -4002,8 +4001,8 @@ function drawGoButton(label) {
 // screen (minus the bottom button zone) instead of centering it
 function MY(y) {
   if (HB <= HW) return OY + y;
-  const top = 34, bottom = HB - 112;
-  return top + (y / HH) * Math.max(HH, bottom - top);
+  const top = hudTop, bottom = HB - 104;
+  return top + (y / 250) * Math.max(240, bottom - top);
 }
 
 function drawBackBtn() {
@@ -4542,6 +4541,7 @@ function frame(t) {
   OY = Math.max(0, Math.round((HB - HH) / 2));
   hctx.setTransform(S, 0, 0, S, 0, 0);
   hctx.clearRect(0, 0, HW, HB);
+  computeHudTop();
   hudRegions = [];
   if (state === 'title') drawTitle();
   else if (state === 'cc') drawCcSelect();

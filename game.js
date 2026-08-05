@@ -1801,7 +1801,10 @@ function buildTrack(mapIdx) {
     }
     const dist = Math.sqrt(bestD);
     const lat = (x - best.x) * best.nx + (z - best.y) * best.ny;
-    const edgeY = roadY(best, clamp(lat, -HALFW, HALFW)) - 2.2;
+    // sink deeper under the roadbed itself: grid interpolation on banked
+    // corners could lift grass triangles through the asphalt
+    const inner = clamp((HALFW - 6 - dist) / 30, 0, 1);
+    const edgeY = roadY(best, clamp(lat, -HALFW, HALFW)) - (2.2 + inner * 8);
     const t = clamp((dist - (HALFW + 40)) / 300, 0, 1);
     const w = t * t * (3 - 2 * t);
     return lerp(edgeY, terrainH(x, z), w) - 0.15;
@@ -1850,7 +1853,8 @@ function buildTrack(mapIdx) {
       // follow the banked road edge, and keep the dirt strictly below the
       // asphalt so grass never pokes through the track
       const lat = (wx - best.x) * best.nx + (wz - best.y) * best.ny;
-      const edgeY = roadY(best, clamp(lat, -HALFW, HALFW)) - 2.2;
+      const inner = clamp((HALFW - 6 - dist) / 30, 0, 1); // deep under the roadbed
+      const edgeY = roadY(best, clamp(lat, -HALFW, HALFW)) - (2.2 + inner * 8);
       const t = clamp((dist - (HALFW + 40)) / 300, 0, 1);
       const w = t * t * (3 - 2 * t);
       posA.setY(vi, lerp(edgeY, terrainH(wx, wz), w) - 0.15);

@@ -3852,18 +3852,26 @@ function drawGoButton(label) {
   hitR(x - 10, y - 8, w + 20, h + 16, { t: 'go' });
 }
 
+// menu layout: in portrait, stretch the 320-unit design band over the whole
+// screen (minus the bottom button zone) instead of centering it
+function MY(y) {
+  if (HB <= HW) return OY + y;
+  const top = 34, bottom = HB - 112;
+  return top + (y / HH) * Math.max(HH, bottom - top);
+}
+
 function stepHeader(step, label) {
-  text(`ÉTAPE ${step}/4`, HW / 2, OY + 14, 11, 'center', '#ff50dc');
-  text(label, HW / 2, OY + 28, 22, 'center', '#40e0ff');
-  text('‹ retour', 14, OY + 46, 13, 'left', '#cde');
-  hitR(0, OY + 36, 96, 36, { t: 'back' });
+  text(`ÉTAPE ${step}/4`, HW / 2, MY(14), 11, 'center', '#ff50dc');
+  text(label, HW / 2, MY(28), 22, 'center', '#40e0ff');
+  text('‹ retour', 14, MY(46), 13, 'left', '#cde');
+  hitR(0, MY(36), 96, 36, { t: 'back' });
 }
 
 function drawTitle() {
   hctx.fillStyle = 'rgba(8,5,25,0.35)';
   hctx.fillRect(0, 0, HW, HB);
-  text('IAM KART', HW / 2, OY + 50, 58, 'center', '#40e0ff');
-  text('Inès · Alice · Marlon', HW / 2, OY + 112, 16, 'center', '#ff50dc');
+  text('IAM KART', HW / 2, MY(50), 58, 'center', '#40e0ff');
+  text('Inès · Alice · Marlon', HW / 2, MY(112), 16, 'center', '#ff50dc');
   drawGoButton('JOUER ▶');
   { // duo entry above the main button
     const w = 250, h = 32, x = HW / 2 - w / 2, y = HB - 92;
@@ -3874,7 +3882,7 @@ function drawTitle() {
     hitR(x - 8, y - 6, w + 16, h + 12, { t: 'duo' });
   }
   if (!matchMedia('(pointer: coarse)').matches)
-    text('← → choisir · Entrée valider · B retour · R recommencer', HW / 2, OY + 238, 10, 'center', '#9ab');
+    text('← → choisir · Entrée valider · B retour · R recommencer', HW / 2, MY(238), 10, 'center', '#9ab');
 }
 
 function mpButton(y, label, act) {
@@ -3889,34 +3897,34 @@ function mpButton(y, label, act) {
 function drawMpMenu() {
   hctx.fillStyle = 'rgba(8,5,25,0.5)';
   hctx.fillRect(0, 0, HW, HB);
-  text('JOUER À DEUX', HW / 2, OY + 16, 26, 'center', '#40e0ff');
-  text('2 téléphones — Wi-Fi ou 4G', HW / 2, OY + 48, 12, 'center', '#9ab');
-  mpButton(OY + 84, 'CRÉER UNE PARTIE', { t: 'mp-create' });
-  mpButton(OY + 142, 'REJOINDRE AVEC UN CODE', { t: 'mp-goto-join' });
-  if (net.error) text('⚠ ' + net.error, HW / 2, OY + 202, 12, 'center', '#ff7c6a');
-  text('‹ retour', 14, OY + 46, 13, 'left', '#cde');
-  hitR(0, OY + 36, 96, 36, { t: 'back' });
+  text('JOUER À DEUX', HW / 2, MY(16), 26, 'center', '#40e0ff');
+  text('2 téléphones — Wi-Fi ou 4G', HW / 2, MY(48), 12, 'center', '#9ab');
+  mpButton(MY(84), 'CRÉER UNE PARTIE', { t: 'mp-create' });
+  mpButton(MY(142), 'REJOINDRE AVEC UN CODE', { t: 'mp-goto-join' });
+  if (net.error) text('⚠ ' + net.error, HW / 2, MY(202), 12, 'center', '#ff7c6a');
+  text('‹ retour', 14, MY(46), 13, 'left', '#cde');
+  hitR(0, MY(36), 96, 36, { t: 'back' });
 }
 
 function drawMpHost() {
   hctx.fillStyle = 'rgba(8,5,25,0.6)';
   hctx.fillRect(0, 0, HW, HB);
-  text('TON CODE DE PARTIE', HW / 2, OY + 22, 20, 'center', '#40e0ff');
-  text((net.code || '····').split('').join('  '), HW / 2, OY + 64, 56, 'center', '#ffd24a');
-  text("Donne ce code à l'autre joueur", HW / 2, OY + 148, 14, 'center', '#fff');
+  text('TON CODE DE PARTIE', HW / 2, MY(22), 20, 'center', '#40e0ff');
+  text((net.code || '····').split('').join('  '), HW / 2, MY(64), 56, 'center', '#ffd24a');
+  text("Donne ce code à l'autre joueur", HW / 2, MY(148), 14, 'center', '#fff');
   const dots = '.'.repeat(1 + ((perfNow / 400) | 0) % 3);
-  text((net.status || 'En attente du joueur 2') + dots, HW / 2, OY + 178, 13, 'center', '#9fe');
-  if (net.error) text('⚠ ' + net.error, HW / 2, OY + 210, 12, 'center', '#ff7c6a');
-  text('‹ retour', 14, OY + 46, 13, 'left', '#cde');
-  hitR(0, OY + 36, 96, 36, { t: 'back' });
+  text((net.status || 'En attente du joueur 2') + dots, HW / 2, MY(178), 13, 'center', '#9fe');
+  if (net.error) text('⚠ ' + net.error, HW / 2, MY(210), 12, 'center', '#ff7c6a');
+  text('‹ retour', 14, MY(46), 13, 'left', '#cde');
+  hitR(0, MY(36), 96, 36, { t: 'back' });
 }
 
 function drawMpJoin() {
   hctx.fillStyle = 'rgba(8,5,25,0.6)';
   hctx.fillRect(0, 0, HW, HB);
-  text('TAPE LE CODE', HW / 2, OY + 10, 20, 'center', '#40e0ff');
+  text('TAPE LE CODE', HW / 2, MY(10), 20, 'center', '#40e0ff');
   for (let i = 0; i < 4; i++) { // 4 code slots
-    const x = HW / 2 - 82 + i * 44, y = OY + 38;
+    const x = HW / 2 - 82 + i * 44, y = MY(38);
     hctx.strokeStyle = i === net.joinCode.length ? '#ffd24a' : 'rgba(255,255,255,0.5)';
     hctx.lineWidth = 2;
     hctx.beginPath(); hctx.roundRect(x, y, 36, 40, 8); hctx.stroke();
@@ -3926,7 +3934,7 @@ function drawMpJoin() {
   rows.forEach((row, r) => {
     row.forEach((d, ci) => {
       if (d === null) return;
-      const x = HW / 2 - 74 + ci * 52, y = OY + 92 + r * 40;
+      const x = HW / 2 - 74 + ci * 52, y = MY(92 + r * 40);
       hctx.fillStyle = 'rgba(30,60,140,0.7)';
       hctx.beginPath(); hctx.roundRect(x, y, 44, 32, 10); hctx.fill();
       text(String(d), x + 22, y + 7, 17, 'center', '#fff');
@@ -3935,19 +3943,19 @@ function drawMpJoin() {
   });
   if (net.status) text(net.status + '.'.repeat(1 + ((perfNow / 400) | 0) % 3), HW / 2, HB - 40, 13, 'center', '#9fe');
   if (net.error) text('⚠ ' + net.error, HW / 2, HB - 24, 12, 'center', '#ff7c6a');
-  text('‹ retour', 14, OY + 46, 13, 'left', '#cde');
-  hitR(0, OY + 36, 96, 36, { t: 'back' });
+  text('‹ retour', 14, MY(46), 13, 'left', '#cde');
+  hitR(0, MY(36), 96, 36, { t: 'back' });
 }
 
 function drawMpWait() {
   hctx.fillStyle = 'rgba(8,5,25,0.5)';
   hctx.fillRect(0, 0, HW, HB);
   const dots = '.'.repeat(1 + ((perfNow / 400) | 0) % 3);
-  text('PRÊT !', HW / 2, OY + 60, 26, 'center', '#6ede3a');
-  text("L'hôte choisit le circuit" + dots, HW / 2, OY + 110, 16, 'center', '#fff');
-  text('La course démarre toute seule, tiens-toi prêt 🏁', HW / 2, OY + 146, 12, 'center', '#9ab');
-  text('‹ retour', 14, OY + 46, 13, 'left', '#cde');
-  hitR(0, OY + 36, 96, 36, { t: 'back' });
+  text('PRÊT !', HW / 2, MY(60), 26, 'center', '#6ede3a');
+  text("L'hôte choisit le circuit" + dots, HW / 2, MY(110), 16, 'center', '#fff');
+  text('La course démarre toute seule, tiens-toi prêt 🏁', HW / 2, MY(146), 12, 'center', '#9ab');
+  text('‹ retour', 14, MY(46), 13, 'left', '#cde');
+  hitR(0, MY(36), 96, 36, { t: 'back' });
 }
 
 function drawCcSelect() {
@@ -3956,7 +3964,7 @@ function drawCcSelect() {
   stepHeader(1, 'CHOISIS TA CYLINDRÉE');
   CC_CLASSES.forEach((cc, i) => {
     const sel = i === ccSel;
-    const y = OY + 84 + i * 52;
+    const y = MY(84 + i * 52);
     hitR(HW / 2 - 150, y - 10, 300, 48, { t: 'cc', i });
     if (sel) {
       hctx.fillStyle = 'rgba(64,224,255,0.18)';
@@ -3973,13 +3981,13 @@ function drawCcSelect() {
 function drawCharSelect() {
   // no dark overlay: the 3D vehicle close-up IS the star of this screen
   stepHeader(2, 'CHOISIS TON VÉHICULE');
-  text('◀', HW / 2 - 130, OY + 130, 34, 'center', '#fff');
-  text('▶', HW / 2 + 130, OY + 130, 34, 'center', '#fff');
-  hitR(HW / 2 - 180, OY + 90, 100, 110, { t: 'nav', d: -1 });
-  hitR(HW / 2 + 80, OY + 90, 100, 110, { t: 'nav', d: 1 });
-  text(VEHICLES[vehSel], HW / 2, OY + 62, 28, 'center', '#ffd24a');
-  text(`${vehSel + 1} / ${VEHICLES.length}`, HW / 2, OY + 96, 11, 'center', '#9ab');
-  text('← glisse pour changer →', HW / 2, OY + 232, 11, 'center', '#8ac');
+  text('◀', HW / 2 - 130, MY(130), 34, 'center', '#fff');
+  text('▶', HW / 2 + 130, MY(130), 34, 'center', '#fff');
+  hitR(HW / 2 - 180, MY(90), 100, 110, { t: 'nav', d: -1 });
+  hitR(HW / 2 + 80, MY(90), 100, 110, { t: 'nav', d: 1 });
+  text(VEHICLES[vehSel], HW / 2, MY(62), 28, 'center', '#ffd24a');
+  text(`${vehSel + 1} / ${VEHICLES.length}`, HW / 2, MY(96), 11, 'center', '#9ab');
+  text('← glisse pour changer →', HW / 2, MY(232), 11, 'center', '#8ac');
   drawGoButton('CONTINUER ▶');
 }
 
@@ -3990,7 +3998,7 @@ function drawColorSelect() {
   const x0 = HW / 2 - total / 2;
   COLOR_PALETTE.forEach((col, i) => {
     const x = x0 + i * (sw + gap);
-    const y = OY + 210;
+    const y = MY(210);
     hitR(x - 5, y - 5, sw + 10, sw + 10, { t: 'col', i });
     hctx.fillStyle = col;
     hctx.globalAlpha = i === colorSel ? 1 : 0.6;
@@ -4002,10 +4010,10 @@ function drawColorSelect() {
       hctx.beginPath(); hctx.roundRect(x - 3, y - 3, sw + 6, sw + 6, 12); hctx.stroke();
     }
   });
-  text('◀', HW / 2 - 130, OY + 120, 34, 'center', '#fff');
-  text('▶', HW / 2 + 130, OY + 120, 34, 'center', '#fff');
-  hitR(HW / 2 - 180, OY + 90, 100, 100, { t: 'nav', d: -1 });
-  hitR(HW / 2 + 80, OY + 90, 100, 100, { t: 'nav', d: 1 });
+  text('◀', HW / 2 - 130, MY(120), 34, 'center', '#fff');
+  text('▶', HW / 2 + 130, MY(120), 34, 'center', '#fff');
+  hitR(HW / 2 - 180, MY(90), 100, 100, { t: 'nav', d: -1 });
+  hitR(HW / 2 + 80, MY(90), 100, 100, { t: 'nav', d: 1 });
   drawGoButton('CONTINUER ▶');
 }
 
@@ -4015,28 +4023,28 @@ function drawMapSelect() {
   hctx.fillRect(0, 0, HW, HB);
   stepHeader(4, 'CHOISIS TON CIRCUIT');
   const map = MAPS[mapSel];
-  text('◀', HW / 2 - 150, OY + 110, 30, 'center', '#fff');
-  text('▶', HW / 2 + 150, OY + 110, 30, 'center', '#fff');
-  hitR(HW / 2 - 195, OY + 80, 90, 100, { t: 'nav', d: -1 });
-  hitR(HW / 2 + 105, OY + 80, 90, 100, { t: 'nav', d: 1 });
-  text(map.name.toUpperCase(), HW / 2, OY + 58, 28, 'center', '#ffd24a');
-  text(map.desc, HW / 2, OY + 92, 12, 'center', '#cfe');
+  text('◀', HW / 2 - 150, MY(110), 30, 'center', '#fff');
+  text('▶', HW / 2 + 150, MY(110), 30, 'center', '#fff');
+  hitR(HW / 2 - 195, MY(80), 90, 100, { t: 'nav', d: -1 });
+  hitR(HW / 2 + 105, MY(80), 90, 100, { t: 'nav', d: 1 });
+  text(map.name.toUpperCase(), HW / 2, MY(58), 28, 'center', '#ffd24a');
+  text(map.desc, HW / 2, MY(92), 12, 'center', '#cfe');
   hctx.globalAlpha = 0.95;
-  hctx.drawImage(track.miniCanvas, HW / 2 - 44, OY + 112, 88, 88);
+  hctx.drawImage(track.miniCanvas, HW / 2 - 44, MY(112), 88, 88);
   hctx.globalAlpha = 1;
   // best local record for the chosen cc
   const recs = recordsFor(map.id, ccSel);
   if (recs.length)
-    text(`Record ${CC_CLASSES[ccSel].label} : ${fmtTime(recs[0].t)} (${recs[0].name})`, HW / 2, OY + 204, 11, 'center', '#ff50dc');
+    text(`Record ${CC_CLASSES[ccSel].label} : ${fmtTime(recs[0].t)} (${recs[0].name})`, HW / 2, MY(204), 11, 'center', '#ff50dc');
   else
-    text(`Aucun record en ${CC_CLASSES[ccSel].label} — à toi de jouer !`, HW / 2, OY + 204, 11, 'center', '#9ab');
+    text(`Aucun record en ${CC_CLASSES[ccSel].label} — à toi de jouer !`, HW / 2, MY(204), 11, 'center', '#9ab');
   // carousel of every circuit
   const th = 40, gap = 10;
   const total = MAPS.length * th + (MAPS.length - 1) * gap;
   const x0 = HW / 2 - total / 2;
   MAPS.forEach((m, i) => {
     const x = x0 + i * (th + gap);
-    const y = OY + 226;
+    const y = MY(226);
     hitR(x - 4, y - 4, th + 8, th + 8, { t: 'map', i });
     hctx.globalAlpha = i === mapSel ? 1 : 0.55;
     hctx.drawImage(mapThumbs[i], x, y, th, th);

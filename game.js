@@ -381,6 +381,11 @@ function unlockAudio() {
     engineOsc2.connect(subGain).connect(engineFilter);
     engineFilter.connect(engineGain).connect(AC.destination);
     engineOsc.start(); engineOsc2.start(); lfo.start();
+    musicGain = AC.createGain();
+    musicGain.gain.value = 1;
+    musicGain.connect(AC.destination);
+    musicNext = AC.currentTime + 0.1;
+    setInterval(musicSchedule, 110);
   } catch (e) { AC = null; }
 }
 function beep(freq, dur = 0.1, type = 'square', slideTo = 0, vol = 0.12) {
@@ -394,6 +399,60 @@ function beep(freq, dur = 0.1, type = 'square', slideTo = 0, vol = 0.12) {
   o.connect(g).connect(AC.destination);
   o.start(); o.stop(AC.currentTime + dur + 0.02);
 }
+/* ---- ambient music: chiptune sequencer, gentle in menus, driving in race ---- */
+let musicGain = null, musicNext = 0, musicStep = 0;
+const MTOF = (m) => 440 * Math.pow(2, (m - 69) / 12);
+const MENU_BASS = [48, 45, 41, 43]; // C A F G
+const RACE_BASS = [36, 36, 43, 43, 45, 45, 41, 43];
+const LEAD = [72, 76, 79, 76, 74, 72, 74, 76, 67, 71, 74, 71, 69, 67, 69, 71,
+  72, 76, 79, 81, 79, 76, 74, 72, 74, 76, 74, 71, 69, 67, 64, 67];
+function musicNote(t, freq, dur, type, vol) {
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type;
+  o.frequency.value = freq;
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(vol, t + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g).connect(musicGain);
+  o.start(t); o.stop(t + dur + 0.05);
+}
+function musicHat(t) {
+  if (!musicHat.buf) {
+    const buf = AC.createBuffer(1, Math.floor(AC.sampleRate * 0.05), AC.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+    musicHat.buf = buf;
+  }
+  const b = AC.createBufferSource();
+  b.buffer = musicHat.buf;
+  const g = AC.createGain(); g.gain.value = 0.045;
+  const f = AC.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 6500;
+  b.connect(f).connect(g).connect(musicGain);
+  b.start(t);
+}
+function musicSchedule() {
+  if (!AC || !musicGain) return;
+  if (muted) { musicNext = 0; return; }
+  if (musicNext < AC.currentTime) musicNext = AC.currentTime + 0.06; // resume cleanly
+  const racing = state === 'race' || state === 'countdown';
+  const stepDur = 60 / (racing ? 132 : 96) / 2; // eighth notes
+  while (musicNext < AC.currentTime + 0.35) {
+    const st2 = musicStep;
+    if (st2 % 2 === 0) {
+      const bassArr = racing ? RACE_BASS : MENU_BASS;
+      musicNote(musicNext, MTOF(bassArr[(st2 >> 1) % bassArr.length] - 12), stepDur * (racing ? 0.9 : 1.8), 'square', racing ? 0.045 : 0.03);
+    }
+    if (racing) {
+      musicNote(musicNext, MTOF(LEAD[st2 % LEAD.length]), stepDur * 0.9, 'triangle', 0.04);
+      if (st2 % 4 === 2) musicHat(musicNext);
+    } else if (st2 % 4 !== 3) {
+      musicNote(musicNext, MTOF(LEAD[(st2 * 2) % LEAD.length]), stepDur * 1.6, 'sine', 0.026);
+    }
+    musicNext += stepDur;
+    musicStep++;
+  }
+}
+
 function updateEngine(speed, racing) {
   if (!AC || !engineGain) return;
   engineGain.gain.setTargetAtTime((racing && !muted) ? 0.05 : 0, AC.currentTime, 0.1);
@@ -405,7 +464,7 @@ function updateEngine(speed, racing) {
 
 /* ---------------- Renderer ---------------- */
 const renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.75));
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2.5)); // near-native on iPhone
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -454,7 +513,7 @@ function canvasTexture(size, draw, repeat) {
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   if (repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; }
-  t.anisotropy = 4;
+  t.anisotropy = 8;
   return t;
 }
 
@@ -4446,8 +4505,8 @@ function drawGoButton(label) {
 // screen (minus the bottom button zone) instead of centering it
 function MY(y) {
   if (HB <= HW) return OY + y;
-  const top = hudTop, bottom = HB - 104;
-  return top + (y / 250) * Math.max(240, bottom - top);
+  const top = hudTop, bottom = HB - 92;
+  return top + (y / 235) * Math.max(235, bottom - top);
 }
 
 function headerVeil() {
@@ -4587,7 +4646,7 @@ function drawCcSelect() {
   stepHeader(1, 'CHOISIS TA CYLINDRÉE');
   CC_CLASSES.forEach((cc, i) => {
     const sel = i === ccSel;
-    const y = MY(84 + i * 52);
+    const y = MY(80 + i * 58);
     hitR(HW / 2 - 160, y - 14, 320, 56, { t: 'cc', i });
     hctx.fillStyle = sel ? 'rgba(64,224,255,0.20)' : 'rgba(8,10,28,0.55)';
     hctx.strokeStyle = sel ? '#40e0ff' : 'rgba(255,255,255,0.28)';
@@ -4769,7 +4828,7 @@ function resize() {
   lastCW = w; lastCH = h;
   renderer.setSize(w, h, false);
   composer.setSize(w, h);
-  composer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.75));
+  composer.setPixelRatio(Math.min(devicePixelRatio || 1, 2.5));
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   const dpr = Math.min(devicePixelRatio || 1, 2);

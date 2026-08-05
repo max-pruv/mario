@@ -2811,6 +2811,81 @@ function netSend(msg) {
   if (net.conn && net.conn.open) { try { net.conn.send(msg); } catch (e) { /* drop */ } }
 }
 
+/* ---- voice chat: each side calls the other with its mic stream ---- */
+net.voice = { sending: false, stream: null, calls: [], incoming: 0 };
+let voiceEl = null;
+
+function playRemoteVoice(stream) {
+  if (!voiceEl) {
+    voiceEl = document.createElement('audio');
+    voiceEl.autoplay = true;
+    voiceEl.setAttribute('playsinline', '');
+    document.body.appendChild(voiceEl);
+  }
+  voiceEl.srcObject = stream;
+  const tryPlay = () => voiceEl.play().catch(() => {
+    // iOS: retry on the next user gesture
+    document.addEventListener('pointerdown', tryPlay, { once: true });
+  });
+  tryPlay();
+  net.voice.incoming++;
+}
+
+function voiceAnswer(call) {
+  try {
+    call.answer(net.voice.stream || undefined);
+    call.on('stream', playRemoteVoice);
+    call.on('close', () => { net.voice.calls = net.voice.calls.filter((c) => c !== call); });
+    net.voice.calls.push(call);
+  } catch (e) { /* refuse silently */ }
+}
+
+async function voiceToggle() {
+  if (net.voice.sending) { voiceStopSending(); updateMicBtn(); return; }
+  if (!(net.conn && net.conn.open)) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    net.voice.stream = stream;
+    net.voice.sending = true;
+    const call = net.peer.call(net.conn.peer, stream, { metadata: { type: 'voice' } });
+    if (call) {
+      call.on('stream', playRemoteVoice); // the other side may answer with its mic
+      call.on('close', () => { net.voice.calls = net.voice.calls.filter((c) => c !== call); });
+      net.voice.calls.push(call);
+    }
+    beep(880, 0.1, 'square', 1320);
+  } catch (e) {
+    net.error = 'Micro refusé — vérifie les autorisations';
+  }
+  updateMicBtn();
+}
+
+function voiceStopSending() {
+  if (net.voice.stream) { try { for (const t of net.voice.stream.getTracks()) t.stop(); } catch (e) {} }
+  net.voice.stream = null;
+  net.voice.sending = false;
+  beep(440, 0.1, 'square');
+}
+
+function voiceShutdown() {
+  voiceStopSending();
+  for (const c of net.voice.calls) { try { c.close(); } catch (e) {} }
+  net.voice.calls = [];
+  net.voice.incoming = 0;
+  if (voiceEl) { try { voiceEl.srcObject = null; } catch (e) {} }
+  updateMicBtn();
+}
+
+const micBtn = document.getElementById('btnMic');
+function updateMicBtn() {
+  if (!micBtn) return;
+  const show = net.active && net.conn && net.conn.open;
+  micBtn.style.display = show ? '' : 'none';
+  micBtn.textContent = net.voice.sending ? '🎙 ON' : '🎙 OFF';
+  micBtn.classList.toggle('on', net.voice.sending);
+}
+if (micBtn) micBtn.addEventListener('click', () => { voiceToggle(); });
+
 function netHost() {
   netQuit(true);
   if (typeof Peer === 'undefined') { net.error = 'Réseau indisponible'; state = 'mp'; return; }
@@ -2825,6 +2900,7 @@ function netHost() {
     if (net.conn && net.conn.open) { try { c.close(); } catch (e) {} return; } // duo only
     netAttach(c);
   });
+  p.on('call', voiceAnswer);
   p.on('error', (err) => {
     if (err && err.type === 'unavailable-id') { // code already taken — roll another
       try { p.destroy(); } catch (e) {}
@@ -2843,6 +2919,7 @@ function netJoinInit() {
   net.joinCode = '';
   const p = new Peer(peerOpts());
   net.peer = p;
+  p.on('call', voiceAnswer);
   p.on('open', () => {
     if (net.pendingConnect) { const c = net.pendingConnect; net.pendingConnect = null; netConnectTo(c); }
   });
@@ -2889,6 +2966,7 @@ function netFail(err) {
 }
 
 function netShutdownPeer() {
+  voiceShutdown();
   try { if (net.conn) net.conn.close(); } catch (e) {}
   try { if (net.peer) net.peer.destroy(); } catch (e) {}
   net.conn = null; net.peer = null;
@@ -3053,6 +3131,10 @@ function netLerpKart(k, dt) {
 
 // periodic sends: my kart at 15 Hz, host AI fleet at 10 Hz, reconnection retries
 function netTick(dt) {
+  if (micBtn) {
+    const show = net.active && net.conn && net.conn.open;
+    if ((micBtn.style.display === 'none') === show) updateMicBtn();
+  }
   if (net.aiGoneT > 0) net.aiGoneT -= dt;
   if (!net.active) return;
   if (net.lostT > 0) {
@@ -4321,8 +4403,11 @@ window.IAM = {
       active: net.active, isHost: net.isHost, code: net.code,
       open: !!(net.conn && net.conn.open), status: net.status, error: net.error,
       remoteReady: net.remoteReady, lostT: net.lostT,
+      voiceSending: net.voice ? net.voice.sending : false,
+      voiceIncoming: net.voice ? net.voice.incoming : 0,
     };
   },
+  voiceToggle() { voiceToggle(); },
   start(mapIdx = 0, ccIdx = 2, charIdx = 0) {
     menuChar = charIdx; mapSel = mapIdx; ccSel = ccIdx;
     ccMul = CC_CLASSES[ccSel].mul;

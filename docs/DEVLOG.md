@@ -2,6 +2,14 @@
 
 Journal des releases. Le numéro correspond au `CACHE_VERSION` du service worker (`sw.js`) : chaque bump déclenche la mise à jour automatique de tous les clients installés.
 
+## v23 — Chat vocal entre les deux joueurs
+
+- **Bouton 🎙 en haut à droite dès que les deux téléphones sont connectés** : un tap → le micro s'active (autorisation demandée la première fois) et la voix part **directement** vers l'autre téléphone par le même tunnel pair-à-pair WebRTC que le jeu — aucun serveur, aucune inscription.
+- Chacun contrôle son propre micro (🎙 OFF par défaut, bouton rouge quand il émet) ; l'autre entend dans le haut-parleur. Écho et bruit filtrés (echoCancellation + noiseSuppression).
+- Astuce iOS : si le son de l'autre n'arrive pas tout de suite, un simple tap n'importe où le débloque (règle Apple sur la lecture audio).
+- Le micro se coupe proprement à la fin de la partie ou si la connexion tombe.
+- Testé de bout en bout : deux navigateurs à micros simulés, flux vocal reçu dans les deux sens, on/off propre — 7/7.
+
 ## v22 — Conduite précise, kart à plat sur la piste
 
 - **Les 4 roues toujours au sol** : l'orientation du kart est désormais calculée à partir de la **vraie normale de la surface** (devers + pente combinés, projetés sur le cap réel du kart). Fini la voiture penchée n'importe comment dans les virages relevés ou lors des bousculades — elle épouse la route quelle que soit sa direction.

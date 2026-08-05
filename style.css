@@ -128,6 +128,21 @@ html, body {
   -webkit-user-select: none; user-select: none;
 }
 #btnAuto.on { background: rgba(40,170,80,.6); border-color: #6ede3a; }
+#btnMic {
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top));
+  right: max(10px, env(safe-area-inset-right));
+  z-index: 10;
+  border: 2px solid rgba(255,255,255,.5);
+  border-radius: 18px;
+  background: rgba(20,20,40,.55);
+  color: #fff;
+  font: bold 12px/1 system-ui, sans-serif;
+  padding: 9px 12px;
+  touch-action: none;
+  -webkit-user-select: none; user-select: none;
+}
+#btnMic.on { background: rgba(220,60,90,.65); border-color: #ff6a8a; }
 @media (pointer: fine) {
   #btnGyro { display: none; }
   #btnAudio { left: max(10px, env(safe-area-inset-left)); }

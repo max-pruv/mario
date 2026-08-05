@@ -2718,6 +2718,17 @@ function clearProjectiles() {
   bananas = []; shells = [];
 }
 
+// the AI rivals get a fresh random name every race (Inès/Alice/Marlon keep theirs)
+const AI_NAMES = [
+  'TURBO-LÉO', 'ZOÉ', 'CAPTAIN NINO', 'LILA', 'MAX FLASH', 'SACHA', 'THÉO TURBO', 'MIA',
+  'ENZO VROUM', 'JADE', 'HUGO NITRO', 'ROBO-ROSE', 'PIT-PAT', 'COMÈTE', 'FUSÉE JO', 'DR ZIGZAG',
+  'MME PRESSÉE', 'GRAND V', 'PÉPITO', 'TONNERRE', 'MINUIT', 'ÉCLAIR LOU', 'TAC-TAC', 'BOLIDE B',
+];
+
+function kartName(k) {
+  return k.aiName || CHARACTERS[k.charIdx].name;
+}
+
 function resetRace(playerChar) {
   clearProjectiles();
   ensureKartMeshes();
@@ -2734,6 +2745,13 @@ function resetRace(playerChar) {
     k.angle = Math.atan2(c.diry, c.dirx);
     k.trackIdx = idx;
     karts.push(k);
+  }
+  {
+    const pool = [...AI_NAMES];
+    for (const k of karts) {
+      if (k.isPlayer || k.charIdx <= 2) continue; // humans and the IAM kids keep their names
+      k.aiName = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+    }
   }
   player = karts[0];
   for (const b of track.itemBoxes) { b.respawn = 0; b.mesh.visible = true; }
@@ -4234,7 +4252,7 @@ function drawFinish() {
     const big = net.active;
     const y = OY + (big ? 70 : 58) + i * (big ? 34 : 22);
     text(PLACE_TXT[place], HW / 2 - 130, y, big ? 20 : 14, 'left', PLACE_COL[place]);
-    text(ch.name + (k.isPlayer ? '  ★ toi' : big ? '  (joueur 2)' : ''), HW / 2 - 70, y, big ? 18 : 14, 'left', k.isPlayer ? '#fff' : ch.color);
+    text((k.isPlayer ? ch.name + '  ★ toi' : big ? ch.name + '  (joueur 2)' : kartName(k)), HW / 2 - 70, y, big ? 18 : 14, 'left', k.isPlayer ? '#fff' : ch.color);
     if (k.finishTime) text(fmtTime(k.finishTime), HW / 2 + 130, y, big ? 16 : 12, 'right', '#cfe');
     else if (big) text('en course…', HW / 2 + 130, y, 12, 'right', '#9ab');
   });
